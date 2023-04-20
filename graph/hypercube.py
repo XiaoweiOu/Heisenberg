@@ -42,9 +42,10 @@ class Hypercube(Graph):
                 if self.pbc or (not self.pbc and p_coordinate[d] + 1 < self.length):
                     neighbor1[d] = (p_coordinate[d] + 1) % self.length
                     adj_list[p].append(self._coordinate_to_point(neighbor1))
-                if self.pbc or (not self.pbc and p_coordinate[d] - 1 >= 0):
-                    neighbor2[d] = (p_coordinate[d] - 1 + self.length) % self.length
-                    adj_list[p].append(self._coordinate_to_point(neighbor2))
+                if self.length > 2: #for length=2, plus 1 and minus 1 will get the same result.
+                    if self.pbc or (not self.pbc and p_coordinate[d] - 1 >= 0):
+                        neighbor2[d] = (p_coordinate[d] - 1 + self.length) % self.length
+                        adj_list[p].append(self._coordinate_to_point(neighbor2))
 
         return adj_list
 
@@ -131,3 +132,27 @@ class Hypercube(Graph):
                     bonds.append((i, j))
 
         return num_bonds, bonds
+
+    def _point_to_coordinate(self, point):
+        """
+            Convert a given point to a coordinate based on row-major order
+        """
+        assert point < self.num_points
+        coordinate = []
+        for i in reversed(range(self.dimension)):
+            v = self.length ** i
+            coordinate.append(point // v)
+            point = point % v
+
+        return list(reversed(coordinate))
+
+    def _coordinate_to_point(self, coordinate):
+        """
+            Convert a given coordinate to a point based on row-major order
+        """
+        assert len(coordinate) == self.dimension
+        point = 0
+        for i in range(self.dimension):
+            point += coordinate[i] * (self.length ** i)
+
+        return point
