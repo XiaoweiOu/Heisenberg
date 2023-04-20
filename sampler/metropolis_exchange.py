@@ -11,7 +11,7 @@ class MetropolisExchange(Sampler):
     This sampling is used to maintain total sz to zero particularly in Heisenberg model.
     """
 
-    def __init__(self, num_samples, num_steps, total_sz=0):
+    def __init__(self, num_samples, num_steps=1, total_sz=0):
         Sampler.__init__(self, num_samples)
         self.num_steps = num_steps
         self.total_sz = total_sz
@@ -66,10 +66,7 @@ class MetropolisExchange(Sampler):
         new_config = self.get_new_config(starting_sample, num_samples)
 
         ## Calculate the ratio of the new configuration and old configuration probability by computing |log(psi(x')) - log(psi(x))|^2
-        if model.is_real():
-            ratio = tf.abs(model.log_val_diff(new_config, starting_sample)) ** 2
-        else:
-            ratio = tf.abs(tf.exp(model.log_val_diff(new_config, starting_sample))) ** 2
+        ratio = tf.abs(tf.exp(model.log_val_diff(new_config, starting_sample))) ** 2
         
         ## Sampling
         random = tf.random.uniform((num_samples, 1), 0, 1)
@@ -91,7 +88,7 @@ class MetropolisExchange(Sampler):
             Return:
                 new samples with two randomly flipped spins
         """
-        num_points = int(sample.shape[1]) #look like one dimenstion system (?)
+        num_points = int(sample.shape[1])
         position1 = np.random.randint(0, num_points, num_samples)
         position2 = np.random.randint(0, num_points, num_samples)
         row_indices = np.reshape(range(num_samples), (num_samples, 1))
@@ -113,10 +110,10 @@ class MetropolisExchange(Sampler):
             and model to get \Psi(x).
             Args:
                 model: model to calculate \Psi(x)
-                initial_sample: the initial sample
+                initial_sample: the initial sample, shape = [num_sampels,1]
                 num_samples: number of samples returned
             Return:
-                new samples, only the final one (?)
+                new samples, only the final one, shape = [num_sampels,1]
         """
         sample = initial_sample
         for i in range(self.num_steps):
