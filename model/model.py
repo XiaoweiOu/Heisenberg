@@ -22,10 +22,10 @@ class Model(object):
         pass
 
     def is_real(self):
-        return False
+        pass
 
     def is_complex(self):
-        return False
+        pass
 
     def is_probability(self):
         return False
