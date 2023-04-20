@@ -1,2 +1,2 @@
 from .hamiltonian import Hamiltonian
-from .heisenberg import Heisenberg
+from .heisenbergj1j2 import HeisenbergJ1J2
