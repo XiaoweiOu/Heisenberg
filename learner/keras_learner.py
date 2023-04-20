@@ -1,20 +1,15 @@
-from __future__ import print_function
+import numpy as np
 import tensorflow as tf
 import time
-import numpy as np
-import copy
-import scipy.stats
+import csv
+import os
+from tensorflow import keras
+from tensorflow.keras import layers
 
-
-class Learner:
-    """
-    This class is used to specified all the learning process and saving data for logging purposes. 
-    TODO: Minibatch training
-    """
-
+class KerasLearner(object):
     def __init__(self, hamiltonian, model, sampler, optimizer, num_epochs=1000,
                  minibatch_size=0, window_period=50, reference_energy=None, stopping_threshold=0.05,
-                 store_model_freq=0, observables=[], observable_freq = 0, use_sr=False, transfer_sample = None):
+                 store_model_freq=5, observables=[], observable_freq = 0, use_sr=True, transfer_sample = None, save_model = False):
         """
         Construct a learner objects
         Args:
@@ -27,7 +22,7 @@ class Learner:
             window_period: the number of windows for logging purposes (Default: 50) 
             reference_energy: reference energy value if there is any (Default: None)
             stopping_threshold: stopping threshold for the training defined as mean(elocs)/std(elocs) (Default: 0.05)    
-            store_model_freq: store the model only at epochs that is the multiplier of this value. Zero means nothing is stored. By default the model at the first and last epochs are saved. (Default: 0)
+            store_model_freq: store the model only at epochs that is the multiplier of this value. By default the model at the first and last epochs are saved. (Default: 5)
             observables: observables value to compute (Default: [])
             observable_freq: compute the observables only at epochs that is the multiplier of this value. Zero means nothing is stored. By default observables are calculated at the last epoch. (Default: 0)
             
@@ -46,6 +41,7 @@ class Learner:
         self.observable_freq = observable_freq
         self.use_sr = use_sr
         self.transfer_sample = transfer_sample
+        self.save_model = save_model
 
         self.ground_energy = []
         self.ground_energy_std = []
@@ -55,87 +51,60 @@ class Learner:
         self.times = []
         self.observables_value = []
         self.model_params = []
-
         self.samples = []
 
         if self.minibatch_size == 0 or self.minibatch_size > self.sampler.num_samples:
             self.minibatch_size = self.sampler.num_samples
 
-        self.div = 1.0
-
     def learn(self):
-        ## Reset array 
+        ## Reset array
         self.reset_memory_array()
         
-        ### Get initial sample
-        if self.transfer_sample is not None:
-            self.samples = tf.convert_to_tensor(self.transfer_sample)
-        else:
-            self.samples = tf.convert_to_tensor(self.sampler.get_initial_random_samples(self.model.num_visible))
+        ## Get initial sample
+        self.samples = tf.convert_to_tensor(self.sampler.get_initial_random_samples(self.model.num_points))
+        
         print ('===== Training start')
         print('===== Reference energy:',self.reference_energy)  
-        
         for epoch in range(self.num_epochs):
             start = time.time()
             #####################################
             ####### TRAINING PROCESS ############
             #####################################
- 
-            ##### 1. Calculate local energy 
 
+            ##### 1. Calculate local energy 
             elocs = self.get_local_energy(self.samples)    
             energy, energy_std, energy_window, energy_window_std, rel_error = self.process_energy_and_error(elocs)
 
             ##### Some processing
             ## Print status
-            print('Epoch: %d, energy: %.4f, std: %.4f, std / mean: %.4f, relerror: %.5f' % (
+            print('### Epoch: %d, energy: %.4f, std: %.4f, std / mean: %.4f, relerror: %.5f' % (
                 epoch, energy, energy_std, energy_std / np.abs(energy), rel_error), end='')
 
-            ## stop if it is NaN (fail)
-            if np.isnan(energy):
-                params = [tf.identity(a) for a in self.model.get_parameters()]
-                for div in np.arange(1.1,3.0,0.1):
-                    print("Retrying dividing weights by %.1f" % div)
-                    self.model.set_parameters(params / div) 
-                
-                    elocs = self.get_local_energy(self.samples)
-                    energy, energy_std, energy_window, energy_window_std, rel_error = self.process_energy_and_error(elocs)
+            ## save energy
+            result_file = 'result.csv'
+            if not os.path.exists(result_file):
+                csvfile = open(result_file,'w')
+                csvwriter = csv.writer(csvfile)
+                csvwriter.writerow(['epoch','energy'])
+                csvwriter.writerow([epoch,energy])
+                csvfile.close()
+            else:
+                with open(result_file,'a') as csvfile:
+                    csvwriter = csv.writer(csvfile)
+                    csvwriter.writerow([epoch,energy])
 
-                    ##### Some processing
-                    ## Print status
-                    print('Epoch: %d, energy: %.4f, std: %.4f, std / mean: %.4f, relerror: %.5f' % (
-                        epoch, energy, energy_std, energy_std / np.abs(energy), rel_error))
-                    if not np.isnan(energy): 
-                        self.div = div
-                        break 
-
-            if np.isnan(energy):
-                print('Fail NaN')
-                break
-
-            ## check stopping criterion
-            if energy_std / np.abs(energy) < self.stopping_threshold:
-                print('Stopping criterion reached!')
-                break
-
-            #if np.abs(energy) < self.stopping_threshold:
-            #    break
-    
             ## save weight
-            self.store_model(epoch)
-
-            # calculate observable
-            if self.observable_freq != 0 and epoch % self.observable_freq == 0:
-                self.calculate_observables(epoch)            
+            if epoch % self.store_model_freq == 0 and self.save_model == True:
+                self.model.model.save('./result/'+self.model.model_name)
 
             ##### 2. Calculate gradient
             if self.use_sr:
-                grads = self.get_gradient_sr(self.samples, self.minibatch_size, elocs, epoch) 
+                grads = self.get_gradient_sr(self.samples, self.minibatch_size, elocs, epoch)
             else:
                 grads = self.get_gradient(self.samples, self.minibatch_size, elocs)
         
             ##### 3. Apply gradients
-            self.optimizer.apply_gradients(zip(grads, self.model.model.trainable_weights))
+            self.optimizer.apply_gradients(zip([tf.cast(grad, tf.float32) for grad in grads], self.model.model.trainable_weights))
 
             ##### 4. Get new sample
             self.samples = self.sampler.sample(self.model, self.samples, self.minibatch_size)
@@ -153,8 +122,8 @@ class Learner:
 
         print ('===== Training finish')        
         ## save the last data
-        self.store_model(epoch, last=True)
-        self.calculate_observables(epoch)
+        if self.save_model == True:
+            self.model.model.save('./result'+self.model.model_name)
 
     def get_local_energy(self, samples):
         """
@@ -168,20 +137,16 @@ class Learner:
         """
         ## Calculate $H_{x,x'}$
         hamiltonian = self.hamiltonian.calculate_hamiltonian_matrix(samples, len(samples))
+        
         ## Calculate $log(\Psi(x')) - log(\Psi(x))$
         lvd = self.hamiltonian.calculate_ratio(samples, self.model, len(samples))
 
         ## Sum over x'
-        if self.model.is_complex():
-            eloc_array = tf.reduce_sum((tf.exp(lvd) * tf.cast(hamiltonian, tf.complex64)), axis=1, keepdims=True)
-        elif self.model.is_real():
-            eloc_array = tf.reduce_sum((lvd * hamiltonian), axis=1, keepdims=True)
-        else:
-            eloc_array = tf.reduce_sum((tf.exp(lvd) * hamiltonian), axis=1, keepdims=True)
+        eloc_array = tf.reduce_sum((tf.exp(lvd) * tf.cast(hamiltonian, tf.complex64)), axis=1, keepdims=True)
 
         return eloc_array
-
-    def get_gradient(self, samples, sample_size, eloc):
+        
+    def get_gradient(self):
         """
             Calculate the gradient of E[\Psi] defined as 
             $2Re[  <E_{loc}D_{W}> - <E_{loc}><D_{W}> ]$
@@ -198,12 +163,10 @@ class Learner:
         ## Calculate <E_{loc}>
         eloc_mean = tf.reduce_mean(eloc, axis=0, keepdims=True)
 
-
         grads = []
         for ii, derlog in enumerate(derlogs):
             old_shape = derlog.shape
             derlog = tf.reshape(derlog, (sample_size, -1))
-
 
             ## Calculate <D_{W}>
             derlog_mean = tf.reduce_mean(derlog, axis=0, keepdims=True)
@@ -220,25 +183,17 @@ class Learner:
 
     def get_gradient_sr(self, samples, sample_size, eloc, epoch):
         """
-            Calculate the gradient of E[\Psi] defined as 
-            $2Re[  <E_{loc}D_{W}> - <E_{loc}><D_{W}> ]$
-            where D_W is the gradient of the neural network w.r.t to its output defined as
-            $D_{W} = (1 / \Psi(x)) * (d \Psi(x) / dW)$ where W can be the weights or the biases.
-            
-            Stochastic reconfiguration is used.
-
+            Calculate the gradient of E[\Psi] using the stochastic reconfiguration
             Args:
                 samples: the samples to calculate gradient
                 sample_size:  the sample size
                 eloc: the local energy E_{loc}
         """
         ## Get D_{W} from the model
-
-        #psix = tf.exp(self.model.log_val(samples))
         derlogs = self.model.derlog(samples)
         old_shapes = [derlog.shape for derlog in derlogs]
 
-        ## Calculate <E_{oc}>
+        ## Calculate <E_{loc}>
         eloc_mean = tf.reduce_mean(eloc, axis=0, keepdims=True)
 
         ## Calculate O_k
@@ -250,44 +205,27 @@ class Learner:
         ## Calculate <O^*_k O_k>
         all_derlogs_derlogs_mean = tf.einsum('ij, ik->jk', tf.math.conj(all_derlogs), all_derlogs)/ len(samples)
 
-        # print('SHAPE_allderlogs:', all_derlogs.shape) ## (1000, 49)
-        # print('SHAPE_allderlogs_mean:', all_derlogs_mean.shape) ## (1, 49)
-        # print('SHAPE_all_derlogs_derlogs_mean:', all_derlogs_derlogs_mean.shape) ## gives (49,49)
-
         ## Calculate S_kk = <O^*_k O_k> - <O_k><O^*_k>
-        S_kk = all_derlogs_derlogs_mean - tf.math.conj(all_derlogs_mean) * tf.transpose(all_derlogs_mean) ## (49, 49) - (49, 1)* (49, 1) = (49,49)-(49,49)
-        # print('SHAPE_Skk:', S_kk.shape) ## (49, 49)
-
-
+        S_kk = all_derlogs_derlogs_mean - tf.math.conj(all_derlogs_mean) * tf.transpose(all_derlogs_mean)
 
         ## Regularize S_kk to make sure it is invertible
-        regularizer = max(100 * (0.9 ** (epoch+1)), 1e-4)
+        regularizer = 0.2
 
         S_kk_diag_reg = tf.linalg.tensor_diag(regularizer * tf.linalg.diag_part(S_kk))
         S_kk_reg = S_kk + S_kk_diag_reg
-        # print('SHAPE_S_kk_reg: ',S_kk_reg.shape)
-        #S_kk_reg = S_kk_reg + tf.linalg.tensor_diag([1e-6] * S_kk.shape[0])
-        #S_kk_reg = tf.linalg.cholesky(S_kk_reg) 
 
         ## Calculate <D_{W}>
         derlog_mean = tf.reduce_mean(all_derlogs, axis=0, keepdims=True)
 
         #### Calculate <E_loc D_{W}>
         ed = tf.reduce_mean(tf.math.conj(all_derlogs) * eloc, axis = 0, keepdims = True)
-        # print('SHAPE_ed: ',ed.shape)
 
         #### Calculate  $2Re[  <E_{loc}D_{W}> - <E_{loc}><D_{W}> ]$
         #grad = 2 * tf.math.real(ed - derlog_mean * eloc_mean)
         grad = ed - derlog_mean * eloc_mean
-        # grad = (ed - derlog_mean * eloc_mean)
-        # print('SHAPE_grad: ',grad.shape)
 
-
-        ### inv(S_kk) * grads
-        S_inv = tf.linalg.inv(S_kk_reg) # or S_inv = tf.linalg.pinv(S_kk_reg)
-
-        final_grads = tf.matmul(S_inv, tf.transpose(grad))
-        # print('SHAPE_final_grads: ',final_grads.shape)
+        ### inv(S_kk) * grad == final_grads or S_kk * final_grads == grad
+        final_grads = tf.linalg.solve(S_kk_reg, tf.transpose(grad))
 
         grads = []
         prev = 0
@@ -297,7 +235,7 @@ class Learner:
             prev += tf.reduce_prod(old_shape[1:])
  
             grads.append(tf.reshape(final_grad, old_shape[1:]))
-        # print('SHAPE_grads: ',len(grads))
+
         return grads
 
     def process_energy_and_error(self, elocs):
@@ -329,24 +267,6 @@ class Learner:
 
         return ground_energy, ground_energy_std, energy_window, energy_window_std, rel_error
 
-    def calculate_observables(self, epoch): 
-        """
-            Calculate observables if any.
-            Args:
-                epoch: epoch for log purposes
-        """
-        ### Get the probability $|\Psi(x)|^2$ from samples 
-        confs, count_ = np.unique(self.samples, axis=0, return_counts=True)
-        prob_out = count_ / len(self.samples)
-
-        ### Calculate each observables
-        value_map = {}
-        for obs in self.observables: 
-            obs_value = (obs.get_value_ferro(prob_out, confs), obs.get_value_antiferro(prob_out, confs))
-            value_map[obs.get_name()] = obs_value 
-            
-        self.observables_value.append((epoch, value_map))
-        
     def reset_memory_array(self):
         """
         Reset memory array to all empty
@@ -360,17 +280,3 @@ class Learner:
         self.samples = []
         self.model_params = []
         self.observables_value = []
-
-    def store_model(self, epoch, last=False):
-        """
-        Store the model parameters in model_params at each epoch based on store_model_freq if needed.
-        First and last epoch always stored.
-        Args:
-            epoch: the epoch 
-            last: to mark if it is the last epoch or not
-        """
-        if last or epoch == 0:
-            self.model_params.append((epoch, self.model.get_parameters()))
-        else:
-            if self.store_model_freq != 0 and epoch % self.store_model_freq == 0:
-                self.model_params.append((epoch, self.model.get_parameters()))
