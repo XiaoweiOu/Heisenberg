@@ -25,8 +25,8 @@ hamil = HeisenbergJ1J2(square2d, j1=1.0, j2=0.0, total_sz=0.0)
 ## Define this run information
 reference_energy = {'4':-11.23,'6':-24.44}  # 4*4 lattice = -11.23; 6*6 lattice = -24.44
 run_name = 'CNN_MSR_SUN'+str(square2d.length) # current run name: could be the same as load run name
-load_model_path = './result/CNN_MSR_SUN6'
-initial_sample_path = './result/CNN_MSR_SUN6_samples.csv'
+load_model_path = None #'./result/CNN_MSR_SUN6'
+initial_sample_path = None #'./result/CNN_MSR_SUN6_samples.csv'
 is_save = False
 
 ## Define the sampler
