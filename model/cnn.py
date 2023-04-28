@@ -4,25 +4,42 @@ from tensorflow import keras
 from tensorflow.keras import layers
 
 class CNN(object):
-    def __init__(self, length, num_points):
-        self.length = length
-        self.num_points = num_points
-        self.batch_size = 50
-        self.model_name = "CNN_MSR" #amp: cnn network;phi: marshall sign rule
+    def __init__(self, length, dimension, loadpath = None):
+        """
+        Construct a convolutional neural network
+        
+        Args:
+        length: length of lattice
+        dimension: dimension of lattice
+        loadpath: path to load model
 
-        self.create_model()
+        class variables:
+        batch_size
+        num_points: shape of input data, or say number of particles
+        model_name
+        net: keras model object
+        """
+        self.batch_size = 50
+        self.num_points = length ** dimension 
+        self.model_name = "CNN_MSR" #amp: cnn network;phi: marshall sign rule
+        
+        if loadpath == None:
+            self.net = self.create_model(length,dimension)
+            self.net.compile()
+        else:
+            self.net = tf.keras.models.load_model(loadpath)
 
     def __str__(self):
-        return "Amplitude network: CNN \n Phase: sign rule"
+        return "Amplitude network: CNN Phase: sign rule"
 
-    def create_model(self):
+    def create_model(self,length,dimension):
         """
         Create a cnn for the wave funtion.
         Return: log(psi)=lnA+i*phi
         """
         ## reshape input to be 2D data
-        inputs = tf.keras.Input(shape=(self.num_points,),dtype=tf.float64)
-        inputs_re = layers.Reshape((self.length,self.length,),input_shape=(self.num_points,))(inputs)
+        inputs = tf.keras.Input(shape=(length ** dimension,),dtype=tf.float64)
+        inputs_re = layers.Reshape((length,length),input_shape=(length ** dimension,))(inputs)
 
         ## expand a dimension for channel at the end
         inputs_re = tf.expand_dims(inputs_re,-1)
@@ -33,14 +50,14 @@ class CNN(object):
         pool_A = tf.math.reduce_mean(pool_A,axis=-1)
         pool_A = layers.Flatten()(pool_A)
         lnA = tf.math.reduce_sum(pool_A,axis=1)
-        
+
         ## phase
         #Marshall sign rule
         def marshall(x):
             batch_size=tf.shape(x)[0]
             indices=[]
-            for i in range(self.length):
-                for j in range(self.length):
+            for i in range(length):
+                for j in range(length):
                     if i%2==0 and j%2==0:
                         indices.append([i,j])
                     if i%2==1 and j%2==1:
@@ -48,15 +65,20 @@ class CNN(object):
             indices=tf.expand_dims(indices,axis=0)
             indices=tf.tile(indices,[batch_size,1,1])
             gather=tf.gather_nd(params=x[:,:,:,0],indices=indices,batch_dims=1)
-            return tf.math.reduce_sum(gather,axis=-1)
+            gather = (-gather+1)/2
+            return tf.math.reduce_sum(gather,axis=1)*np.pi
         
-        phi = layers.Lambda(function=marshall)(inputs_re)*np.pi
+        phi = layers.Lambda(function=marshall)(inputs_re)
 
         ## output
         # stack the values for output
         outputs = tf.complex(lnA,phi)
-        self.model = tf.keras.Model(inputs=inputs, outputs=outputs)
-        return
+
+        # ### TEST ### lnA=0
+        # batch_size=tf.shape(inputs)[0]
+        # outputs = tf.complex(tf.tile([0.],[batch_size,]),phi)
+
+        return tf.keras.Model(inputs=inputs, outputs=outputs)
     
     def inception(self,inputs,name,num_channels=2048):
         """
@@ -93,7 +115,7 @@ class CNN(object):
             Args:
                 x: the configuration needed to be calculated
         """
-        log_psi = self.model.predict(x, batch_size = self.batch_size, verbose = 0)
+        log_psi = self.net.predict(x, batch_size = self.batch_size, verbose = 0)
         return tf.expand_dims(log_psi,axis=-1)
 
     def log_val_diff(self, xprime, x):
@@ -112,7 +134,7 @@ class CNN(object):
         Calculate $D_{W}(x) = D_{W} = (1 / \Psi(x)) * (d \Psi(x) / dW) = dlog(Psi(x))/dW$ where W can be the weights or the biases.
         """
         with tf.GradientTape(persistent=True) as g:
-            log_psi = self.model(x)
+            log_psi = self.net(x)
         
-        jacobians = g.jacobian(log_psi, self.model.trainable_variables)
+        jacobians = g.jacobian(log_psi, self.net.trainable_variables)
         return [tf.cast(jacobian, tf.complex64) for jacobian in jacobians]
