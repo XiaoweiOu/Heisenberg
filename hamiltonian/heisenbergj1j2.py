@@ -45,7 +45,8 @@ class HeisenbergJ1J2(Hamiltonian):
             The rest of the column contains the off-diagonal, which is $J_1 * (1 - z_i * z_j) / 4 + J_2 * (1 - z_i * z_j) / 4$.
             Considering the raising and lowering operators, it gives a 1/2 if z_i * z_j == -1, and 0 otherwise.
 
-            Therefore, the number of column equals the number of particles + 1 and the number of rows = num_samples
+            Therefore, #columns = 1+ #nearest bond+ #next-nearest bond = 1+4*num_particles
+            #rows = num_samples
         """
 
         diagonal = tf.zeros((num_samples,))
@@ -100,32 +101,33 @@ class HeisenbergJ1J2(Hamiltonian):
         Return:
             The ratio where the first column contains \Psi(x) / \Psi(x).
             The rest of the column contains the non-zero \Psi(x') / \Psi(x).
-            In the Heisenberg model, this corresponds x' where two adjacent spins are flipped. 
-            Therefore, the number of column equals the number of particles + 1 and the number of rows = num_samples
+            In the Heisenberg model, this corresponds x' where two adjacent spins are exchanged. 
+            Therefore, # column = 1 + num_bonds + num_bonds_next = 1 + 4 * num_particles
+            # rows = num_samples
         
         """
 
         lvd = model.log_val_diff(samples, samples)
 
         for (s, s2) in self.graph.bonds:
-            ## Flip 2 adjacent spin
-            flipped_s =  tf.reshape(samples[:,s] * -1 , (num_samples, 1))    
-            flipped_s2 = tf.reshape(samples[:,s2] * -1, (num_samples, 1))
+            ## Swap 2 adjacent spin
+            newcol_s =  tf.reshape(samples[:,s2], (num_samples, 1))    
+            newcol_s2 = tf.reshape(samples[:,s], (num_samples, 1))
 
             new_config = tf.identity(samples)
-            new_config = tf.concat((new_config[:,:s], flipped_s, new_config[:,s+1:]), axis = 1)
-            new_config = tf.concat((new_config[:,:s2], flipped_s2, new_config[:,s2+1:]), axis = 1)
+            new_config = tf.concat((new_config[:,:s], newcol_s, new_config[:,s+1:]), axis = 1)
+            new_config = tf.concat((new_config[:,:s2], newcol_s2, new_config[:,s2+1:]), axis = 1)
 
             lvd = tf.concat((lvd, model.log_val_diff(new_config, samples)), axis=1)
 
         for (s, s2) in self.graph.bonds_next:
-            ## Flip 2 adjacent spin
-            flipped_s =  tf.reshape(samples[:,s] * -1 , (num_samples, 1))    
-            flipped_s2 = tf.reshape(samples[:,s2] * -1, (num_samples, 1))
+            ## Swap 2 adjacent spin
+            newcol_s =  tf.reshape(samples[:,s2], (num_samples, 1))    
+            newcol_s2 = tf.reshape(samples[:,s], (num_samples, 1))
 
             new_config = tf.identity(samples)
-            new_config = tf.concat((new_config[:,:s], flipped_s, new_config[:,s+1:]), axis = 1)
-            new_config = tf.concat((new_config[:,:s2], flipped_s2, new_config[:,s2+1:]), axis = 1)
+            new_config = tf.concat((new_config[:,:s], newcol_s, new_config[:,s+1:]), axis = 1)
+            new_config = tf.concat((new_config[:,:s2], newcol_s2, new_config[:,s2+1:]), axis = 1)
 
             lvd = tf.concat((lvd, model.log_val_diff(new_config, samples)), axis=1)
         return lvd
