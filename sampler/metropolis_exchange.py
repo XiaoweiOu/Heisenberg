@@ -1,6 +1,7 @@
 from sampler import Sampler
 import tensorflow as tf
 import numpy as np
+import gc
 
 
 class MetropolisExchange(Sampler):
@@ -11,9 +12,8 @@ class MetropolisExchange(Sampler):
     This sampling is used to maintain total sz to zero particularly in Heisenberg model.
     """
 
-    def __init__(self, num_samples, num_steps=1, total_sz=0):
+    def __init__(self, num_samples, total_sz=0):
         Sampler.__init__(self, num_samples)
-        self.num_steps = num_steps
         self.total_sz = total_sz
 
     # set total Sz to be 0
@@ -50,6 +50,40 @@ class MetropolisExchange(Sampler):
 
         return init_data
 
+    def get_initial_sample_from_checkerboard(self, length, num_samples=None):
+        """
+        Since it usually takes a long time to equilibrate from the initial random sample, 
+        here I generate the initial sample starting from checkerboard.
+        (TODO) Now there is a problem that with this method,
+        S_kk_reg in stochastic reconfiguration has too many zero eigenvalues even after the regulation.
+        Args:
+            length: the length of lattice (should always be even number)
+            num_samples: number of samples
+        Return:
+            initial random samples
+        """
+        if num_samples is None:
+            num_samples = self.num_samples
+
+        small_1 = [1,-1]
+        small_2 = [-1,1]
+        checkerboard = []
+        checkerboard.append(small_1 * int(length/2))
+        checkerboard.append(small_2 * int(length/2))
+        checkerboard = checkerboard * int(length/2)
+
+        ## shuffle them
+        init_data = []
+        for i in range(num_samples):
+            data = np.copy(checkerboard)
+            np.random.shuffle(data)
+            init_data.append(data)
+
+        init_data = np.array(init_data, np.float32)
+        init_data = np.reshape(init_data, (num_samples, length ** 2))
+
+        return init_data
+
     def sample_once(self, model, starting_sample, num_samples):
         """
             Do a one metropolis step from a given starting samples.
@@ -65,10 +99,10 @@ class MetropolisExchange(Sampler):
         ## Get new configuration by flipping two random spins (?)
         new_config = self.get_new_config(starting_sample, num_samples)
 
-        ## Calculate the ratio of the new configuration and old configuration probability by computing |log(psi(x')) - log(psi(x))|^2
+        ## Calculate the ratio of the new configuration and old configuration probability by computing |psi(x') / psi(x)|^2
         ratio = tf.abs(tf.exp(model.log_val_diff(new_config, starting_sample))) ** 2
         
-        ## Sampling
+        ## Random number
         random = tf.random.uniform((num_samples, 1), 0, 1)
 
         ## Calculate acceptance
@@ -104,30 +138,33 @@ class MetropolisExchange(Sampler):
         new2 = tf.scatter_nd(indices2, elements1, (num_samples, num_points))
         return sample - old1 - old2 + new1 + new2
 
-    def sample(self, model, initial_sample, num_samples):
+    def sample(self, model, initial_sample, num_samples, num_steps):
         """
             Do a metropolis local sample from a given initial sample
             and model to get \Psi(x).
             Args:
                 model: model to calculate \Psi(x)
-                initial_sample: the initial sample, shape = [num_sampels,1]
+                initial_sample: the initial sample, shape = [num_sampels,sample_size]
                 num_samples: number of samples returned
             Return:
-                new samples, only the final one, shape = [num_sampels,1]
+                new samples, only the final one, no intermediate configurations
+                shape = [num_sampels,sample_size]
         """
         sample = initial_sample
-        for i in range(self.num_steps):
+        for i in range(num_steps):
             sample = self.sample_once(model, sample, num_samples)
+            if num_steps>10 and num_steps % 10 == 0:
+                gc.collect()
 
         return sample
 
-    def get_all_samples(self, model, initial_sample, num_samples):
+    def get_all_samples(self, model, initial_sample, num_samples, num_steps):
         """
         This is the same as the function sample, but it returns all samples rather than only the last one.
         """
         all_samples = []
         sample = initial_sample
-        for i in range(self.num_steps):
+        for i in range(num_steps):
             sample = self.sample_once(model, sample, num_samples)
             all_samples.append(sample)
 
