@@ -9,7 +9,8 @@ from tensorflow.keras import layers
 class KerasLearner(object):
     def __init__(self, hamiltonian, model, sampler, optimizer, num_epochs=1000,
                  minibatch_size=0, window_period=50, reference_energy=None, stopping_threshold=0.05,
-                 store_model_freq=5, observables=[], observable_freq = 0, use_sr=True, transfer_sample = None, save_model = False):
+                 store_model_freq=1, observables=[], observable_freq = 0, use_sr=True, transfer_sample = None,
+                 initial_sample_path=None, is_save = True, run_name = ''):
         """
         Construct a learner objects
         Args:
@@ -41,7 +42,9 @@ class KerasLearner(object):
         self.observable_freq = observable_freq
         self.use_sr = use_sr
         self.transfer_sample = transfer_sample
-        self.save_model = save_model
+        self.initial_sample_path = initial_sample_path
+        self.is_save = is_save
+        self.run_name = run_name
 
         self.ground_energy = []
         self.ground_energy_std = []
@@ -61,7 +64,13 @@ class KerasLearner(object):
         self.reset_memory_array()
         
         ## Get initial sample
-        self.samples = tf.convert_to_tensor(self.sampler.get_initial_random_samples(self.model.num_points))
+        if self.initial_sample_path == None:
+            self.samples = tf.convert_to_tensor(self.sampler.get_initial_random_samples(self.model.num_points))
+            ## Move initial sample for thousand of times to get to the equilibrium (default = 1000)
+            print('===== Equilibration start')
+            self.samples = self.sampler.sample(self.model, self.samples, self.minibatch_size, num_steps=1000)
+        else:
+            self.samples = tf.convert_to_tensor(self.load_initial_sample(self.initial_sample_path))
         
         print ('===== Training start')
         print('===== Reference energy:',self.reference_energy)  
@@ -72,7 +81,7 @@ class KerasLearner(object):
             #####################################
 
             ##### 1. Calculate local energy 
-            elocs = self.get_local_energy(self.samples)    
+            elocs = self.get_local_energy(self.samples)
             energy, energy_std, energy_window, energy_window_std, rel_error = self.process_energy_and_error(elocs)
 
             ##### Some processing
@@ -81,33 +90,30 @@ class KerasLearner(object):
                 epoch, energy, energy_std, energy_std / np.abs(energy), rel_error), end='')
 
             ## save energy
-            result_file = 'result.csv'
-            if not os.path.exists(result_file):
-                csvfile = open(result_file,'w')
-                csvwriter = csv.writer(csvfile)
-                csvwriter.writerow(['epoch','energy'])
-                csvwriter.writerow([epoch,energy])
-                csvfile.close()
-            else:
-                with open(result_file,'a') as csvfile:
-                    csvwriter = csv.writer(csvfile)
-                    csvwriter.writerow([epoch,energy])
+            if self.is_save == True:
+                self.save_energy(epoch,energy)
+                self.save_samples(self.samples.numpy().tolist())
 
-            ## save weight
-            if epoch % self.store_model_freq == 0 and self.save_model == True:
-                self.model.model.save('./result/'+self.model.model_name)
+            ## save model
+            if epoch % self.store_model_freq == 0 and self.is_save == True:
+                self.model.net.save('./result/'+self.run_name)
+
+            # if energy < -150:
+            #     print("### TEST ### elocs",elocs)
+            #     print("### TEST ### psi",self.model.log_val(self.samples))
+            #     exit(0)
 
             ##### 2. Calculate gradient
             if self.use_sr:
-                grads = self.get_gradient_sr(self.samples, self.minibatch_size, elocs, epoch)
+                grads = self.get_gradient_sr(self.samples, self.minibatch_size, elocs)
             else:
                 grads = self.get_gradient(self.samples, self.minibatch_size, elocs)
         
             ##### 3. Apply gradients
-            self.optimizer.apply_gradients(zip([tf.cast(grad, tf.float32) for grad in grads], self.model.model.trainable_weights))
+            self.optimizer.apply_gradients(zip([tf.cast(grad, tf.float32) for grad in grads], self.model.net.trainable_weights))
 
             ##### 4. Get new sample
-            self.samples = self.sampler.sample(self.model, self.samples, self.minibatch_size)
+            self.samples = self.sampler.sample(self.model, self.samples, self.minibatch_size, num_steps=1)
 
             #####################################
             #####################################
@@ -122,8 +128,8 @@ class KerasLearner(object):
 
         print ('===== Training finish')        
         ## save the last data
-        if self.save_model == True:
-            self.model.model.save('./result'+self.model.model_name)
+        if self.is_save == True:
+            self.model.net.save('./result'+self.run_name)
 
     def get_local_energy(self, samples):
         """
@@ -137,7 +143,7 @@ class KerasLearner(object):
         """
         ## Calculate $H_{x,x'}$
         hamiltonian = self.hamiltonian.calculate_hamiltonian_matrix(samples, len(samples))
-        
+
         ## Calculate $log(\Psi(x')) - log(\Psi(x))$
         lvd = self.hamiltonian.calculate_ratio(samples, self.model, len(samples))
 
@@ -146,7 +152,38 @@ class KerasLearner(object):
 
         return eloc_array
         
-    def get_gradient(self):
+    def save_energy(self, epoch, energy):
+        """
+        Save all energy values.
+        """
+        result_file = './result/'+self.run_name+'_energy.csv'
+        if epoch == 0 and self.initial_sample_path == None:
+            csvfile = open(result_file,'w')
+            csvwriter = csv.writer(csvfile)
+            csvwriter.writerow(['epoch','energy'])
+            csvwriter.writerow([epoch,energy])
+            csvfile.close()
+        else:
+            with open(result_file,'a') as csvfile:
+                csvwriter = csv.writer(csvfile)
+                csvwriter.writerow([epoch,energy])
+
+    def save_samples(self, samples):
+        """
+        Save the latest Monte Carlo sample / Markov chain.
+        """
+        result_file = './result/'+self.run_name+'_samples.csv'
+        with open(result_file,'w') as csvfile:
+            csvwriter = csv.writer(csvfile)
+            csvwriter.writerows(samples)
+
+    def load_initial_sample(self, initial_sample_path):
+        with open(initial_sample_path,'r') as csvfile:
+            csvreader = csv.reader(csvfile, quoting = csv.QUOTE_NONNUMERIC)
+            initial_sample = [line for line in csvreader]
+        return initial_sample
+
+    def get_gradient(self, samples, sample_size, eloc):
         """
             Calculate the gradient of E[\Psi] defined as 
             $2Re[  <E_{loc}D_{W}> - <E_{loc}><D_{W}> ]$
@@ -181,7 +218,7 @@ class KerasLearner(object):
        
         return grads
 
-    def get_gradient_sr(self, samples, sample_size, eloc, epoch):
+    def get_gradient_sr(self, samples, sample_size, eloc):
         """
             Calculate the gradient of E[\Psi] using the stochastic reconfiguration
             Args:
@@ -209,7 +246,7 @@ class KerasLearner(object):
         S_kk = all_derlogs_derlogs_mean - tf.math.conj(all_derlogs_mean) * tf.transpose(all_derlogs_mean)
 
         ## Regularize S_kk to make sure it is invertible
-        regularizer = 0.2
+        regularizer = 0.5
 
         S_kk_diag_reg = tf.linalg.tensor_diag(regularizer * tf.linalg.diag_part(S_kk))
         S_kk_reg = S_kk + S_kk_diag_reg
@@ -221,8 +258,7 @@ class KerasLearner(object):
         ed = tf.reduce_mean(tf.math.conj(all_derlogs) * eloc, axis = 0, keepdims = True)
 
         #### Calculate  $2Re[  <E_{loc}D_{W}> - <E_{loc}><D_{W}> ]$
-        #grad = 2 * tf.math.real(ed - derlog_mean * eloc_mean)
-        grad = ed - derlog_mean * eloc_mean
+        grad = ed - eloc_mean * derlog_mean
 
         ### inv(S_kk) * grad == final_grads or S_kk * final_grads == grad
         final_grads = tf.linalg.solve(S_kk_reg, tf.transpose(grad))
