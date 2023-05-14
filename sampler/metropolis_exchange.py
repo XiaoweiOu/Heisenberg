@@ -12,8 +12,8 @@ class MetropolisExchange(Sampler):
     This sampling is used to maintain total sz to zero particularly in Heisenberg model.
     """
 
-    def __init__(self, num_samples, total_sz=0):
-        Sampler.__init__(self, num_samples)
+    def __init__(self, num_samples, graph, total_sz=0):
+        Sampler.__init__(self, num_samples, graph)
         self.total_sz = total_sz
 
     # set total Sz to be 0
@@ -96,12 +96,20 @@ class MetropolisExchange(Sampler):
             Return:
                 new samples from one metropolis exchange
         """
-        ## Get new configuration by flipping two random spins (?)
+        ## Get new configuration by flipping two random spins
         new_config = self.get_new_config(starting_sample, num_samples)
 
         ## Calculate the ratio of the new configuration and old configuration probability by computing |psi(x') / psi(x)|^2
         ratio = tf.abs(tf.exp(model.log_val_diff(new_config, starting_sample))) ** 2
-        
+
+        ## To avoid instabilities caused by poor network generalization on the proposed configuration r, 
+        ## we additionally require that |psi(x') / psi(x)|^2 <= 500
+        ## Right now there are always some entries with very large value.
+        # threshold = tf.constant([500.])
+        # while tf.math.reduce_any(tf.math.greater(ratio, threshold)):
+        #     new_config = self.get_new_config(starting_sample, num_samples)
+        #     ratio = tf.abs(tf.exp(model.log_val_diff(new_config, starting_sample))) ** 2
+
         ## Random number
         random = tf.random.uniform((num_samples, 1), 0, 1)
 
@@ -115,16 +123,25 @@ class MetropolisExchange(Sampler):
 
     def get_new_config(self, sample, num_samples):
         """
-            Get a new configuration by flipping two random spins
+            Get a new configuration by flipping two random spins, which are nearest neighbors to each other.
             Args: 
                 sample: the samples that want to be flipped randomly
                 num_samples: the number of samples
             Return:
                 new samples with two randomly flipped spins
         """
-        num_points = int(sample.shape[1])
+        num_points = self.graph.num_points
         position1 = np.random.randint(0, num_points, num_samples)
         position2 = np.random.randint(0, num_points, num_samples)
+
+        # n = self.graph.length
+        # position2 = []
+        # for site1 in position1:
+        #     site2 = np.random.choice([int(site1/n)*n + (site1+1)%n, int(site1/n)*n + (site1-1)%n,
+        #               (int(site1/n)+1)%n * n + site1%n, (int(site1/n)-1)%n * n + site1%n])
+        #     position2.append(site2)
+        # position2 = np.array(position2)
+
         row_indices = np.reshape(range(num_samples), (num_samples, 1))
         col_indices1 = np.reshape(position1, (num_samples, 1))
         col_indices2 = np.reshape(position2, (num_samples, 1))
@@ -144,11 +161,11 @@ class MetropolisExchange(Sampler):
             and model to get \Psi(x).
             Args:
                 model: model to calculate \Psi(x)
-                initial_sample: the initial sample, shape = [num_sampels,sample_size]
+                initial_sample: the initial sample, shape = [num_samples,sample_size]
                 num_samples: number of samples returned
             Return:
                 new samples, only the final one, no intermediate configurations
-                shape = [num_sampels,sample_size]
+                shape = [num_samples,sample_size]
         """
         sample = initial_sample
         for i in range(num_steps):
