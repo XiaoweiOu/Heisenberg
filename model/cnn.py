@@ -1,5 +1,7 @@
 import numpy as np
 import tensorflow as tf
+import os
+import psutil
 from tensorflow import keras
 from tensorflow.keras import layers
 
@@ -52,31 +54,34 @@ class CNN(object):
         lnA = tf.math.reduce_sum(pool_A,axis=1)
 
         ## phase
-        #Marshall sign rule
-        def marshall(x):
-            batch_size=tf.shape(x)[0]
-            indices=[]
-            for i in range(length):
-                for j in range(length):
-                    if i%2==0 and j%2==0:
-                        indices.append([i,j])
-                    if i%2==1 and j%2==1:
-                        indices.append([i,j])
-            indices=tf.expand_dims(indices,axis=0)
-            indices=tf.tile(indices,[batch_size,1,1])
-            gather=tf.gather_nd(params=x[:,:,:,0],indices=indices,batch_dims=1)
-            gather = (-gather+1)/2
-            return tf.math.reduce_sum(gather,axis=1)*np.pi
+        # Marshall sign rule
+        # def marshall(x):
+        #     batch_size=tf.shape(x)[0]
+        #     indices=[]
+        #     for i in range(length):
+        #         for j in range(length):
+        #             if i%2==0 and j%2==0:
+        #                 indices.append([i,j])
+        #             if i%2==1 and j%2==1:
+        #                 indices.append([i,j])
+        #     indices=tf.expand_dims(indices,axis=0)
+        #     indices=tf.tile(indices,[batch_size,1,1])
+        #     gather=tf.gather_nd(params=x[:,:,:,0],indices=indices,batch_dims=1)
+        #     gather = (-gather+1)/2
+        #     return tf.math.reduce_sum(gather,axis=1)*np.pi
         
-        phi = layers.Lambda(function=marshall)(inputs_re)
+        # phi = layers.Lambda(function=marshall)(inputs_re)
+
+        # A regular cnn layer for phi
+        input_phi = self.PBCs(inputs_re,padding=int((7-1)/2))#kernel_size=7
+        convPhi = layers.Conv2D(filters=24, kernel_size=7, padding='VALID', name='convPhi_1',kernel_initializer=tf.keras.initializers.RandomNormal(mean=1.0, stddev=1.0),activation=None)(input_phi)
+        out1 = tf.math.exp(tf.complex(0.,convPhi))
+        out2 = tf.math.reduce_sum(out1,axis=[-1,-2,-3])
+        phi = tf.math.angle(out2)
 
         ## output
         # stack the values for output
         outputs = tf.complex(lnA,phi)
-
-        # ### TEST ### lnA=0
-        # batch_size=tf.shape(inputs)[0]
-        # outputs = tf.complex(tf.tile([0.],[batch_size,]),phi)
 
         return tf.keras.Model(inputs=inputs, outputs=outputs)
     
@@ -135,6 +140,9 @@ class CNN(object):
         """
         with tf.GradientTape(persistent=True) as g:
             log_psi = self.net(x)
-        
-        jacobians = g.jacobian(log_psi, self.net.trainable_variables)
+            real_psi = tf.cast(log_psi,tf.float32) #This line is only necessary if you don't use pfor.
+
+        #Not using vectorized calculation (pfor = Flase) can prevent the excessiv memory consumption.
+        jacobians = g.jacobian(real_psi, self.net.trainable_variables, parallel_iterations = 1000, experimental_use_pfor = False)
+
         return [tf.cast(jacobian, tf.complex64) for jacobian in jacobians]
