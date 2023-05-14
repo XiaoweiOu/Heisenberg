@@ -140,9 +140,11 @@ class CNN(object):
         """
         with tf.GradientTape(persistent=True) as g:
             log_psi = self.net(x)
-            real_psi = tf.cast(log_psi,tf.float32) #This line is only necessary if you don't use pfor.
+            real_psi = tf.math.real(log_psi)
+            imag_psi = tf.math.imag(log_psi)
 
         #Not using vectorized calculation (pfor = Flase) can prevent the excessiv memory consumption.
-        jacobians = g.jacobian(real_psi, self.net.trainable_variables, parallel_iterations = 1000, experimental_use_pfor = False)
+        real_jacobians = g.jacobian(real_psi, self.net.trainable_variables, parallel_iterations = 5000, experimental_use_pfor = False)
+        imag_jacobians = g.jacobian(imag_psi, self.net.trainable_variables, parallel_iterations = 5000, experimental_use_pfor = False)
 
-        return [tf.cast(jacobian, tf.complex64) for jacobian in jacobians]
+        return [tf.complex(real_jacobians[i], imag_jacobians[i]) for i in range(len(real_jacobians))]
