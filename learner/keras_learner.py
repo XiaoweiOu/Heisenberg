@@ -3,13 +3,14 @@ import tensorflow as tf
 import time
 import csv
 import os
+import psutil
 from tensorflow import keras
 from tensorflow.keras import layers
 
 class KerasLearner(object):
     def __init__(self, hamiltonian, model, sampler, optimizer, num_epochs=1000,
                  minibatch_size=0, window_period=50, reference_energy=None, stopping_threshold=0.05,
-                 store_model_freq=1, observables=[], observable_freq = 0, use_sr=True, transfer_sample = None,
+                 store_model_freq=1, observables=[], observable_freq = 0, use_sr=True,
                  initial_sample_path=None, is_save = True, run_name = ''):
         """
         Construct a learner objects
@@ -41,7 +42,6 @@ class KerasLearner(object):
         self.observables = observables
         self.observable_freq = observable_freq
         self.use_sr = use_sr
-        self.transfer_sample = transfer_sample
         self.initial_sample_path = initial_sample_path
         self.is_save = is_save
         self.run_name = run_name
@@ -64,14 +64,14 @@ class KerasLearner(object):
         self.reset_memory_array()
         
         ## Get initial sample
-        if self.initial_sample_path == None:
+        if self.initial_sample_path is None:
             self.samples = tf.convert_to_tensor(self.sampler.get_initial_random_samples(self.model.num_points))
-            ## Move initial sample for thousand of times to get to the equilibrium (default = 1000)
-            print('===== Equilibration start')
-            self.samples = self.sampler.sample(self.model, self.samples, self.minibatch_size, num_steps=1000)
+            ## Move initial sample for thousand of times to get to the equilibrium (default = self.model.num_points*10)
+            print('===== Equilibrate initial sample start')
+            self.samples = self.sampler.sample(self.model, self.samples, self.minibatch_size, num_steps=self.model.num_points*10)
         else:
             self.samples = tf.convert_to_tensor(self.load_initial_sample(self.initial_sample_path))
-        
+
         print ('===== Training start')
         print('===== Reference energy:',self.reference_energy)  
         for epoch in range(self.num_epochs):
@@ -82,38 +82,39 @@ class KerasLearner(object):
 
             ##### 1. Calculate local energy 
             elocs = self.get_local_energy(self.samples)
-            energy, energy_std, energy_window, energy_window_std, rel_error = self.process_energy_and_error(elocs)
+            energy_imag, energy, energy_std, rel_error = self.process_energy_and_error(elocs)
 
-            ##### Some processing
+            ## Post-selection of samples
+            energy_imag, energy, energy_std, rel_error = self.post_selection(epoch, energy_imag, energy, energy_std, rel_error)
+
+            ## Confirm the current sample and append
+            self.append_energy_and_error(energy,energy_std,rel_error)
+
             ## Print status
             print('### Epoch: %d, energy: %.4f, std: %.4f, std / mean: %.4f, relerror: %.5f' % (
                 epoch, energy, energy_std, energy_std / np.abs(energy), rel_error), end='')
 
-            ## save energy
-            if self.is_save == True:
+            ## save energy: saving to disk so often is expensive; it is better to do one time in the end.
+            ## but I hope we can save the information whenever we break the program.
+            if self.is_save is True:
                 self.save_energy(epoch,energy)
                 self.save_samples(self.samples.numpy().tolist())
 
             ## save model
-            if epoch % self.store_model_freq == 0 and self.is_save == True:
+            if epoch % self.store_model_freq == 0 and self.is_save is True:
                 self.model.net.save('./result/'+self.run_name)
-
-            # if energy < -150:
-            #     print("### TEST ### elocs",elocs)
-            #     print("### TEST ### psi",self.model.log_val(self.samples))
-            #     exit(0)
 
             ##### 2. Calculate gradient
             if self.use_sr:
                 grads = self.get_gradient_sr(self.samples, self.minibatch_size, elocs)
             else:
                 grads = self.get_gradient(self.samples, self.minibatch_size, elocs)
-        
+
             ##### 3. Apply gradients
             self.optimizer.apply_gradients(zip([tf.cast(grad, tf.float32) for grad in grads], self.model.net.trainable_weights))
 
             ##### 4. Get new sample
-            self.samples = self.sampler.sample(self.model, self.samples, self.minibatch_size, num_steps=1)
+            self.samples = self.sampler.sample(self.model, self.samples, self.minibatch_size, num_steps=self.model.num_points*10)
 
             #####################################
             #####################################
@@ -128,7 +129,7 @@ class KerasLearner(object):
 
         print ('===== Training finish')        
         ## save the last data
-        if self.is_save == True:
+        if self.is_save is True:
             self.model.net.save('./result'+self.run_name)
 
     def get_local_energy(self, samples):
@@ -152,12 +153,29 @@ class KerasLearner(object):
 
         return eloc_array
         
+    def post_selection(self, epoch, energy_imag, energy, energy_std, rel_error):
+        """
+        prevent the runaway or blow-up problem:
+        ## |Re[E(epoch)-E(epoch-1)]| < alpha1
+        ## |Im[E(epoch)]|< alpha2 * energy_std[epoch]
+        ## energy_std[epoch] < alpha3 * energy_std[epoch-1]
+        """
+        alpha1, alpha2, alpha3 = 2,5,6
+        while epoch >= 1 and (np.abs(energy - self.ground_energy[-1]) > alpha1 or \
+        np.abs(energy_imag) > alpha2 * energy_std or \
+        energy_std > alpha3 * self.ground_energy_std[-1]):
+            self.samples = self.sampler.sample(self.model, self.samples, self.minibatch_size, num_steps=self.model.num_points)
+            elocs = self.get_local_energy(self.samples)
+            energy_imag, energy, energy_std, rel_error = self.process_energy_and_error(elocs)
+
+        return energy_imag, energy, energy_std, rel_error
+
     def save_energy(self, epoch, energy):
         """
         Save all energy values.
         """
         result_file = './result/'+self.run_name+'_energy.csv'
-        if epoch == 0 and self.initial_sample_path == None:
+        if epoch == 0 and self.initial_sample_path is None:
             csvfile = open(result_file,'w')
             csvwriter = csv.writer(csvfile)
             csvwriter.writerow(['epoch','energy'])
@@ -246,10 +264,11 @@ class KerasLearner(object):
         S_kk = all_derlogs_derlogs_mean - tf.math.conj(all_derlogs_mean) * tf.transpose(all_derlogs_mean)
 
         ## Regularize S_kk to make sure it is invertible
-        regularizer = 0.5
+        regularizer = 0.2
 
-        S_kk_diag_reg = tf.linalg.tensor_diag(regularizer * tf.linalg.diag_part(S_kk))
-        S_kk_reg = S_kk + S_kk_diag_reg
+        # S_kk_diag_reg = tf.linalg.tensor_diag(regularizer * tf.linalg.diag_part(S_kk))
+        # S_kk_reg = S_kk + S_kk_diag_reg
+        S_kk_reg = tf.linalg.set_diag(S_kk,tf.linalg.diag_part(S_kk) + regularizer)
 
         ## Calculate <D_{W}>
         derlog_mean = tf.reduce_mean(all_derlogs, axis=0, keepdims=True)
@@ -258,7 +277,7 @@ class KerasLearner(object):
         ed = tf.reduce_mean(tf.math.conj(all_derlogs) * eloc, axis = 0, keepdims = True)
 
         #### Calculate  $2Re[  <E_{loc}D_{W}> - <E_{loc}><D_{W}> ]$
-        grad = ed - eloc_mean * derlog_mean
+        grad = 2 * tf.cast(tf.math.real(ed - eloc_mean * derlog_mean), tf.complex64)
 
         ### inv(S_kk) * grad == final_grads or S_kk * final_grads == grad
         final_grads = tf.linalg.solve(S_kk_reg, tf.transpose(grad))
@@ -280,28 +299,31 @@ class KerasLearner(object):
             Args:
                 elocs: the local energies array of one epoch
         """
+        ## Calculate the imaginary part of ground state energy
+        ground_energy_imag = np.imag(np.mean(elocs))
+
         ## Calculate ground state energy mean and std
         ground_energy = np.real(np.mean(elocs))
         ground_energy_std = np.real(np.std(elocs))
-
-        self.ground_energy.append(ground_energy)
-        self.ground_energy_std.append(ground_energy_std)
-
-        ### Calculate energy over windows
-        energy_window = np.mean(self.ground_energy[-self.window_period:])
-        energy_window_std = np.std(self.ground_energy[-self.window_period:])
-
-        self.energy_windows.append(energy_window)
-        self.energy_windows_std.append(energy_window_std)
 
         ### Calculate relative error
         if self.reference_energy is None:
             rel_error = 0.0
         else:
             rel_error = np.abs((ground_energy - self.reference_energy) / self.reference_energy)
+
+        return ground_energy_imag, ground_energy, ground_energy_std, rel_error
+
+    def append_energy_and_error(self,ground_energy,ground_energy_std,rel_error):
+        self.ground_energy.append(ground_energy)
+        self.ground_energy_std.append(ground_energy_std)
         self.rel_errors.append(rel_error)
 
-        return ground_energy, ground_energy_std, energy_window, energy_window_std, rel_error
+        ### Calculate energy over windows
+        energy_window = np.mean(self.ground_energy[-self.window_period:])
+        energy_window_std = np.std(self.ground_energy[-self.window_period:])
+        self.energy_windows.append(energy_window)
+        self.energy_windows_std.append(energy_window_std)
 
     def reset_memory_array(self):
         """
