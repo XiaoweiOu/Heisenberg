@@ -24,10 +24,15 @@ class Hypercube(Graph):
         self.adj_list = self._create_adj_list()
         if self.next_nearest:
             self.adj_list_next = self._create_adj_list_next()
+        else:
+            self.adj_list_next = []
             
         self.num_bonds, self.bonds = self._find_bonds()
         if self.next_nearest:
             self.num_bonds_next, self.bonds_next = self._find_bonds_next()
+        else:
+            self.num_bonds_next = 0
+            self.bonds_next = []
 
     def _create_adj_list(self):
         """
