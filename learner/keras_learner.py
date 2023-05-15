@@ -140,7 +140,7 @@ class KerasLearner(object):
             Args:
                 samples: samples that we want to calculate the local energy
             Return:
-                The local energy of each given samples
+                The local energy of each given samples (complex value).
         """
         ## Calculate $H_{x,x'}$
         hamiltonian = self.hamiltonian.calculate_hamiltonian_matrix(samples, len(samples))
@@ -226,11 +226,11 @@ class KerasLearner(object):
             ## Calculate <D_{W}>
             derlog_mean = tf.reduce_mean(derlog, axis=0, keepdims=True)
 
-            #### Calculate <E_loc D_{W}>
+            #### Calculate <E_loc D_^*{W}>
             ed = tf.reduce_mean(tf.math.conj(derlog) * eloc, axis = 0, keepdims = True)
 
-            #### Calculate  $2Re[  <E_{loc}D_{W}> - <E_{loc}><D_{W}> ]$
-            grad = (ed - derlog_mean * eloc_mean)
+            #### Calculate  $2Re[  <E_{loc}D_^*{W}> - <E_{loc}><D_^*{W}> ]$
+            grad = 2 * tf.cast(tf.math.real(ed - eloc_mean * tf.math.conj(derlog_mean)), tf.complex64)
         
             grads.append(tf.reshape(grad, old_shape[1:]))
        
@@ -273,11 +273,11 @@ class KerasLearner(object):
         ## Calculate <D_{W}>
         derlog_mean = tf.reduce_mean(all_derlogs, axis=0, keepdims=True)
 
-        #### Calculate <E_loc D_{W}>
+        #### Calculate <E_loc D^*_{W}>
         ed = tf.reduce_mean(tf.math.conj(all_derlogs) * eloc, axis = 0, keepdims = True)
 
-        #### Calculate  $2Re[  <E_{loc}D_{W}> - <E_{loc}><D_{W}> ]$
-        grad = 2 * tf.cast(tf.math.real(ed - eloc_mean * derlog_mean), tf.complex64)
+        #### Calculate  $2Re[  <E_{loc}D_^*{W}> - <E_{loc}><D_^*{W}> ]$
+        grad = 2 * tf.cast(tf.math.real(ed - eloc_mean * tf.math.conj(derlog_mean)), tf.complex64)
 
         ### inv(S_kk) * grad == final_grads or S_kk * final_grads == grad
         final_grads = tf.linalg.solve(S_kk_reg, tf.transpose(grad))

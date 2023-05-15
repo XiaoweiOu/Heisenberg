@@ -32,7 +32,7 @@ class HeisenbergJ1J2(Hamiltonian):
     def calculate_hamiltonian_matrix(self, samples, num_samples):
         """
         Calculate the Hamiltonian matrix $H_{x,x'}$ from a given samples x.
-        Only non-zero elements are returned.
+        Return real values for Hamiltonian matrix elements.
 
         Args:
             samples: The samples 
