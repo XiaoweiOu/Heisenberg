@@ -72,7 +72,7 @@ class KerasLearner(object):
         else:
             self.samples = tf.convert_to_tensor(self.load_initial_sample(self.initial_sample_path))
 
-        print ('===== Training start')
+        print ('===== Training '+ self.run_name + ' start')
         print('===== Reference energy:',self.reference_energy)  
         for epoch in range(self.num_epochs):
             start = time.time()
@@ -204,7 +204,7 @@ class KerasLearner(object):
     def get_gradient(self, samples, sample_size, eloc):
         """
             Calculate the gradient of E[\Psi] defined as 
-            $2Re[  <E_{loc}D_{W}> - <E_{loc}><D_{W}> ]$
+            $2Re[  <E_{loc}D^*_{W}> - <E_{loc}><D^*_{W}> ]$
             where D_W is the gradient of the neural network w.r.t to its output defined as
             $D_{W} = (1 / \Psi(x)) * (d \Psi(x) / dW)$ where W can be the weights or the biases.
             Args:
@@ -226,10 +226,10 @@ class KerasLearner(object):
             ## Calculate <D_{W}>
             derlog_mean = tf.reduce_mean(derlog, axis=0, keepdims=True)
 
-            #### Calculate <E_loc D_^*{W}>
+            #### Calculate <E_loc D^*_{W}>
             ed = tf.reduce_mean(tf.math.conj(derlog) * eloc, axis = 0, keepdims = True)
 
-            #### Calculate  $2Re[  <E_{loc}D_^*{W}> - <E_{loc}><D_^*{W}> ]$
+            #### Calculate  $2Re[  <E_{loc}D^*_{W}> - <E_{loc}><D^*_{W}> ]$
             grad = 2 * tf.cast(tf.math.real(ed - eloc_mean * tf.math.conj(derlog_mean)), tf.complex64)
         
             grads.append(tf.reshape(grad, old_shape[1:]))
@@ -276,7 +276,7 @@ class KerasLearner(object):
         #### Calculate <E_loc D^*_{W}>
         ed = tf.reduce_mean(tf.math.conj(all_derlogs) * eloc, axis = 0, keepdims = True)
 
-        #### Calculate  $2Re[  <E_{loc}D_^*{W}> - <E_{loc}><D_^*{W}> ]$
+        #### Calculate  $2Re[  <E_{loc}D^*_{W}> - <E_{loc}><D^*_{W}> ]$
         grad = 2 * tf.cast(tf.math.real(ed - eloc_mean * tf.math.conj(derlog_mean)), tf.complex64)
 
         ### inv(S_kk) * grad == final_grads or S_kk * final_grads == grad
