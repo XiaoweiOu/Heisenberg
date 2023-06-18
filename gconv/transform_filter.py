@@ -1,0 +1,40 @@
+import tensorflow as tf
+
+def transform_filter_2d_nhwc(filters, flat_indices, shape_info, validate_indices=True):
+    """
+    Transform a set of filters defined on a split plane group G.
+    This is the first step of the G-Conv. The user will typically not have to call this function directly.
+
+    filters: the input filter bank filters has shape (n, n, nti * ni, no), where:
+
+    n: the filter width and height
+    ni: the number of input channels (note: the input feature map is assumed to have ni * nti number of channels)
+    nti: the number of transformations in H (the stabilizer of the origin in the input space)
+    For example, nti == 1 for images / functions on Z2, since only the identity translation leaves the origin invariant.
+    Similarly, nti == 4 for the group p4, because there are 4 transformations in p4 (namely, the four rotations around
+    the origin) that leave the origin in p4 (i.e. the identity transformation) fixed.
+    no: the number of output channels (note: the G-Conv will actually create no * nto number of channels, see below.
+    nto: the number of transformations in H
+
+    flat_indices: the index array has shape (nto, nti, n, n)
+    Index arrays for various groups can be created with functions in groupy.gconv.make_gconv_indices.
+    For example: flat_inds = flatten_indices(make_d4_z2_indices(ksize=3))
+
+    The output filter bank transformed_w has shape (n, n, ni * nti, no * nto),
+    (so there are nto times as many filters in the output as we had in the input filters)
+    """
+
+    # The indexing is done using tf.gather. This function can only do integer indexing along the first axis.
+    # We want to index the spatial and transformation axes of our filter, so we must flatten them into one axis.
+    no, nto, ni, nti, n = shape_info
+    w_flat = tf.reshape(filters, [n * n * nti, ni, no])                             # shape (n * n * nti, ni, no)
+
+    # Do the transformation / indexing operation.
+    transformed_w = tf.gather(w_flat, flat_indices,
+                              validate_indices=validate_indices)              # shape (nto, nti, n, n, ni, no)
+
+    # Put the axes in the right order, and collapse them to get a standard shape filter bank
+    transformed_w = tf.transpose(transformed_w, [2, 3, 4, 1, 5, 0])           # shape (n, n, ni, nti, no, nto)
+    transformed_w = tf.reshape(transformed_w, [n, n, ni * nti, no * nto])     # shape (n, n, ni * nti, no * nto)
+
+    return transformed_w
