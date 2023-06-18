@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import csv
 import numpy as np
 
-result_file = 'result/CNN_MSR_SUN6_amp_cnn_phi_linear_amp_penalty_GlorotNormal_energy.csv'
+result_file = 'result/CNN_MSR_SUN6_j205_energy.csv'
 epoch = []
 energy = []
 with open(result_file,'r') as csvfile:

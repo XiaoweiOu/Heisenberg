@@ -3,14 +3,13 @@ import tensorflow as tf
 import time
 import csv
 import os
-import psutil
-from tensorflow import keras
-from tensorflow.keras import layers
+import gc
+from gradient import get_gradient,get_gradient_sr,get_gradient_amp_penalty
 
 class KerasLearner(object):
     def __init__(self, hamiltonian, model, sampler, optimizer, num_epochs=1000,
                  minibatch_size=0, window_period=50, reference_energy=None, stopping_threshold=0.05,
-                 store_model_freq=1, observables=[], observable_freq = 0, use_sr=True,
+                 store_model_freq=1, observables=[], observable_freq = 0, use_gradient='sr',
                  initial_sample_path=None, is_save = True, run_name = ''):
         """
         Construct a learner objects
@@ -41,7 +40,7 @@ class KerasLearner(object):
         self.store_model_freq = store_model_freq
         self.observables = observables
         self.observable_freq = observable_freq
-        self.use_sr = use_sr
+        self.use_gradient = use_gradient
         self.initial_sample_path = initial_sample_path
         self.is_save = is_save
         self.run_name = run_name
@@ -73,7 +72,7 @@ class KerasLearner(object):
             self.samples = tf.convert_to_tensor(self.load_initial_sample(self.initial_sample_path))
 
         print ('===== Training '+ self.run_name + ' start')
-        print('===== Reference energy:',self.reference_energy)  
+        print('===== Reference energy:',self.reference_energy)
         for epoch in range(self.num_epochs):
             start = time.time()
             #####################################
@@ -94,10 +93,9 @@ class KerasLearner(object):
             print('### Epoch: %d, energy: %.4f, std: %.4f, std / mean: %.4f, relerror: %.5f' % (
                 epoch, energy, energy_std, energy_std / np.abs(energy), rel_error), end='')
 
-            ## save energy: saving to disk so often is expensive; it is better to do one time in the end.
-            ## but I hope we can save the information whenever we break the program.
+            ## save energy and samples
             if self.is_save is True:
-                self.save_energy(epoch,energy)
+                self.save_energy(epoch,energy,energy_std)
                 self.save_samples(self.samples.numpy().tolist())
 
             ## save model
@@ -105,10 +103,16 @@ class KerasLearner(object):
                 self.model.net.save('./result/'+self.run_name)
 
             ##### 2. Calculate gradient
-            if self.use_sr:
-                grads = self.get_gradient_sr(self.samples, self.minibatch_size, elocs)
+            derlogs = self.model.derlog(self.samples)
+            if self.use_gradient == 'plain':
+                grads = get_gradient(derlogs, self.minibatch_size, elocs)
+            elif self.use_gradient == 'sr':
+                grads = get_gradient_sr(derlogs, self.minibatch_size, elocs)
+            elif self.use_gradient == 'amp_penalty':
+                grads = get_gradient_amp_penalty(derlogs, self.minibatch_size, elocs)
             else:
-                grads = self.get_gradient(self.samples, self.minibatch_size, elocs)
+                print("### ERROR ### gradient type incorrect!")
+                exit(0)
 
             ##### 3. Apply gradients
             self.optimizer.apply_gradients(zip([tf.cast(grad, tf.float32) for grad in grads], self.model.net.trainable_weights))
@@ -160,7 +164,7 @@ class KerasLearner(object):
         ## |Im[E(epoch)]|< alpha2 * energy_std[epoch]
         ## energy_std[epoch] < alpha3 * energy_std[epoch-1]
         """
-        alpha1, alpha2, alpha3 = 2,5,6
+        alpha1, alpha2, alpha3 = 8,5,6
         while epoch >= 1 and (np.abs(energy - self.ground_energy[-1]) > alpha1 or \
         np.abs(energy_imag) > alpha2 * energy_std or \
         energy_std > alpha3 * self.ground_energy_std[-1]):
@@ -170,21 +174,21 @@ class KerasLearner(object):
 
         return energy_imag, energy, energy_std, rel_error
 
-    def save_energy(self, epoch, energy):
+    def save_energy(self, epoch, energy, energy_std):
         """
-        Save all energy values.
+        Save all energy values and the standard deviation of the current local energy array.
         """
         result_file = './result/'+self.run_name+'_energy.csv'
-        if epoch == 0 and self.initial_sample_path is None:
+        if os.path.isfile(result_file) == False:
             csvfile = open(result_file,'w')
             csvwriter = csv.writer(csvfile)
-            csvwriter.writerow(['epoch','energy'])
-            csvwriter.writerow([epoch,energy])
+            csvwriter.writerow(['epoch','energy','energy_std'])
+            csvwriter.writerow([epoch,energy,energy_std])
             csvfile.close()
         else:
             with open(result_file,'a') as csvfile:
                 csvwriter = csv.writer(csvfile)
-                csvwriter.writerow([epoch,energy])
+                csvwriter.writerow([epoch,energy,energy_std])
 
     def save_samples(self, samples):
         """
@@ -200,98 +204,6 @@ class KerasLearner(object):
             csvreader = csv.reader(csvfile, quoting = csv.QUOTE_NONNUMERIC)
             initial_sample = [line for line in csvreader]
         return initial_sample
-
-    def get_gradient(self, samples, sample_size, eloc):
-        """
-            Calculate the gradient of E[\Psi] defined as 
-            $2Re[  <E_{loc}D^*_{W}> - <E_{loc}><D^*_{W}> ]$
-            where D_W is the gradient of the neural network w.r.t to its output defined as
-            $D_{W} = (1 / \Psi(x)) * (d \Psi(x) / dW)$ where W can be the weights or the biases.
-            Args:
-                samples: the samples to calculate gradient
-                sample_size:  the sample size
-                eloc: the local energy E_{loc}
-        """
-        ## Get D_{W} from the model
-        derlogs = self.model.derlog(samples) 
-
-        ## Calculate <E_{loc}>
-        eloc_mean = tf.reduce_mean(eloc, axis=0, keepdims=True)
-
-        grads = []
-        for ii, derlog in enumerate(derlogs):
-            old_shape = derlog.shape
-            derlog = tf.reshape(derlog, (sample_size, -1))
-
-            ## Calculate <D_{W}>
-            derlog_mean = tf.reduce_mean(derlog, axis=0, keepdims=True)
-
-            #### Calculate <E_loc D^*_{W}>
-            ed = tf.reduce_mean(tf.math.conj(derlog) * eloc, axis = 0, keepdims = True)
-
-            #### Calculate  $2Re[  <E_{loc}D^*_{W}> - <E_{loc}><D^*_{W}> ]$
-            grad = 2 * tf.cast(tf.math.real(ed - eloc_mean * tf.math.conj(derlog_mean)), tf.complex64)
-        
-            grads.append(tf.reshape(grad, old_shape[1:]))
-       
-        return grads
-
-    def get_gradient_sr(self, samples, sample_size, eloc):
-        """
-            Calculate the gradient of E[\Psi] using the stochastic reconfiguration
-            Args:
-                samples: the samples to calculate gradient
-                sample_size:  the sample size
-                eloc: the local energy E_{loc}
-        """
-        ## Get D_{W} from the model
-        derlogs = self.model.derlog(samples)
-        old_shapes = [derlog.shape for derlog in derlogs]
-
-        ## Calculate <E_{loc}>
-        eloc_mean = tf.reduce_mean(eloc, axis=0, keepdims=True)
-
-        ## Calculate O_k
-        all_derlogs = tf.concat([tf.reshape(derlog, (sample_size, -1)) for derlog in derlogs], 1)
-
-        ## Calculate <O_k>
-        all_derlogs_mean = tf.reduce_mean(all_derlogs, axis=0, keepdims=True)
-
-        ## Calculate <O^*_k O_k>
-        all_derlogs_derlogs_mean = tf.einsum('ij, ik->jk', tf.math.conj(all_derlogs), all_derlogs)/ len(samples)
-
-        ## Calculate S_kk = <O^*_k O_k> - <O_k><O^*_k>
-        S_kk = all_derlogs_derlogs_mean - tf.math.conj(all_derlogs_mean) * tf.transpose(all_derlogs_mean)
-
-        ## Regularize S_kk to make sure it is invertible
-        regularizer = 0.2
-
-        # S_kk_diag_reg = tf.linalg.tensor_diag(regularizer * tf.linalg.diag_part(S_kk))
-        # S_kk_reg = S_kk + S_kk_diag_reg
-        S_kk_reg = tf.linalg.set_diag(S_kk,tf.linalg.diag_part(S_kk) + regularizer)
-
-        ## Calculate <D_{W}>
-        derlog_mean = tf.reduce_mean(all_derlogs, axis=0, keepdims=True)
-
-        #### Calculate <E_loc D^*_{W}>
-        ed = tf.reduce_mean(tf.math.conj(all_derlogs) * eloc, axis = 0, keepdims = True)
-
-        #### Calculate  $2Re[  <E_{loc}D^*_{W}> - <E_{loc}><D^*_{W}> ]$
-        grad = 2 * tf.cast(tf.math.real(ed - eloc_mean * tf.math.conj(derlog_mean)), tf.complex64)
-
-        ### inv(S_kk) * grad == final_grads or S_kk * final_grads == grad
-        final_grads = tf.linalg.solve(S_kk_reg, tf.transpose(grad))
-
-        grads = []
-        prev = 0
-        for old_shape in old_shapes:
-            final_grad = final_grads[prev:prev+tf.reduce_prod(old_shape[1:])]
-            
-            prev += tf.reduce_prod(old_shape[1:])
- 
-            grads.append(tf.reshape(final_grad, old_shape[1:]))
-
-        return grads
 
     def process_energy_and_error(self, elocs):
         """
