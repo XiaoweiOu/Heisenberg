@@ -26,20 +26,23 @@ reference_energy = {'4':-11.23,'6':-24.44,'8':-43.10,'10':-67.15}
 square2d = Hypercube(length=6, dimension=2, pbc=True, next_nearest=False)
 hamil = HeisenbergJ1J2(square2d, j1=1.0, j2=0.0, total_sz=0.0)
 
-## (!! Need to set every time !!) Define the information for this run
-run_name = 'CNN_MSR_SUN'+str(square2d.length)+'_amp_cnn_phi_linear_amp_penalty_GlorotNormal' # current run name: could be the same as load run name
-load_model_path = 'result/CNN_MSR_SUN6_amp_cnn_phi_linear_amp_penalty_GlorotNormal'
-initial_sample_path = 'result/CNN_MSR_SUN6_amp_cnn_phi_linear_amp_penalty_GlorotNormal_samples.csv'
-is_save = True
-
 ## Define the sampler
 sampler = MetropolisExchange(num_samples=5000, graph=square2d)
+
+## If load trained network and initial samples
+load_model_path = 'result/CNN_MSR_SUN6_amp_cnn_phi_linear_amp_penalty_GlorotNormal'
+initial_sample_path = 'result/CNN_MSR_SUN6_amp_cnn_phi_linear_amp_penalty_GlorotNormal_samples.csv'
 
 ## Define the neural networks model
 mlp = AmpCNNPhiLinear(length = square2d.length, dimension = square2d.dimension, loadpath = load_model_path)
 
+## (!! Need to set every time !!) Define the information for this run
+# current run name: could be the same as load run name
+run_name = mlp.__class__.__name__+'_SUN'+str(square2d.length)+'_amp_cnn_phi_linear_amp_penalty_GlorotNormal' 
+is_save = False
+
 ## Define hyperparameters for learner
-learning_rate = 0.02
+learning_rate = 0.04
 optimizer = tf.keras.optimizers.SGD(learning_rate)
 stopping_threshold = 0.01
 num_epochs = 1000

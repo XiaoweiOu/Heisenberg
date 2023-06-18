@@ -1,7 +1,10 @@
 import tensorflow as tf
 def get_gradient_amp_penalty(derlogs, sample_size, eloc):
         """
-            (TODO) write the new formula
+            Calculate the gradient of E[\Psi] using the modifed stochastic reconfiguration with mass term
+            G_ij = < mass**2 * Re[O_i(sk)] Re[O_j(sk)] + Im[O_i(sk)] Im[O_j(sk)] >
+            We use the coefficient "mass" to control the training velocity of amplitude
+
             Args:
                 derlogs: $D_{W}(x) = D_{W} = (1 / \Psi(x)) * (d \Psi(x) / dW) = dlog(Psi(x))/dW$
                 sample_size: the sample size
@@ -17,7 +20,6 @@ def get_gradient_amp_penalty(derlogs, sample_size, eloc):
         all_derlogs_mean = tf.reduce_mean(all_derlogs, axis=0, keepdims=True)
 
         ## Calculate G_ij = < mass**2 * Re[O_i(sk)] Re[O_j(sk)] + Im[O_i(sk)] Im[O_j(sk)] >
-        ## We use the coefficient "mass" to control the training velocity of amplitude
         mass = 4.
         all_derlogs_derlogs_mean = (mass*mass * tf.einsum('ki, kj->ij', tf.math.real(all_derlogs), tf.math.real(all_derlogs)) \
                     +tf.einsum('ki, kj->ij', tf.math.imag(all_derlogs), tf.math.imag(all_derlogs)) )/ sample_size

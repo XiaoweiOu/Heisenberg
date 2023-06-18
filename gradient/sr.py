@@ -2,6 +2,7 @@ import tensorflow as tf
 def get_gradient_sr(derlogs, sample_size, eloc):
         """
             Calculate the gradient of E[\Psi] using the stochastic reconfiguration
+            S_kk = <O^*_k O_k> - <O^*_k><O_k>
             Args:
                 derlogs: $D_{W}(x) = D_{W} = (1 / \Psi(x)) * (d \Psi(x) / dW) = dlog(Psi(x))/dW$
                 sample_size: the sample size

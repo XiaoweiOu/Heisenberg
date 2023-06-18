@@ -23,20 +23,23 @@ from learner import Learner,KerasLearner
 reference_energy = {'4':None,'6':-18.0,'8':None,'10':-49.56}
 
 ## Define the physical system
-square2d = Hypercube(length=10, dimension=2, pbc=True, next_nearest=True)
+square2d = Hypercube(length=6, dimension=2, pbc=True, next_nearest=True)
 hamil = HeisenbergJ1J2(square2d, j1=1.0, j2=0.5, total_sz=0.0)
-
-## (!! Need to set every time !!) Define the information for this run
-run_name = 'CNN_MSR_SUN'+str(square2d.length)+'_j205' # current run name: could be the same as load run name
-load_model_path = None 
-initial_sample_path = None 
-is_save = True
 
 ## Define the sampler
 sampler = MetropolisExchange(num_samples=2000, graph=square2d)
 
+## If load trained network and initial samples
+load_model_path = None 
+initial_sample_path = None 
+
 ## Define the neural networks model
 mlp = AmpCNNPhiMSR(length = square2d.length, dimension = square2d.dimension, loadpath = load_model_path)
+
+## (!! Need to set every time !!) Define the information for this run
+# current run name: could be the same as load run name
+run_name = mlp.__class__.__name__+'_SUN'+str(square2d.length)+'_j205'
+is_save = True
 
 ## Define hyperparameters for learner
 learning_rate = 0.04

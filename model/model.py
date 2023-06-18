@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
+from tool import time_it
 
 class Model:
     def __init__(self, length, dimension, loadpath = None):
@@ -18,7 +19,7 @@ class Model:
         num_points: shape of input data, or say number of particles
         net: keras model object
         """
-        self.batch_size = 50
+        self.batch_size = 2000
         self.num_points = length ** dimension
         
         if loadpath == None:
@@ -52,7 +53,8 @@ class Model:
             Args:
                 x: the configuration needed to be calculated
         """
-        log_psi = self.net.predict(x, batch_size = self.batch_size, verbose = 0)
+        # log_psi = self.net.predict(x, batch_size = self.batch_size, verbose = 0)
+        log_psi = self.net(x)
         return tf.expand_dims(log_psi,axis=-1)
 
     def log_val_diff(self, xprime, x):

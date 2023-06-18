@@ -7,6 +7,10 @@ from tensorflow.keras import layers
 from model import Model
 
 class AmpCNNPhiLinear(Model):
+    """
+    Amplitude network: one CNN layer(16;5*5;GlorotNormal)
+    Phase network: one dense layer(RandomNormal initializer)
+    """
     def __str__(self):
         return "Amplitude network: CNN Phase: linear layer"
 
@@ -43,13 +47,6 @@ class AmpCNNPhiLinear(Model):
             outputs = layers.Concatenate(axis=3)([conv3, conv5, max3])
             return outputs
         
-        '''incep_A = inception(inputs_re,name='amp_inception',num_channels=10)
-        pool_A,A_indices = tf.math.top_k(incep_A, k=1)
-        pool_A = tf.math.reduce_mean(pool_A,axis=-1)
-        pool_A = layers.Flatten()(pool_A)
-        lnA = tf.math.reduce_sum(pool_A,axis=1)'''
-
-        #tf.keras.initializers.GlorotNormal()
         inputs_pbc = self.PBCs(inputs_re,padding=int((5-1)/2))#kernel_size=5
         conv_A = layers.Conv2D(filters=16, kernel_size=5, padding='VALID', name='conv_amp', kernel_initializer=tf.keras.initializers.GlorotNormal(), activation='relu')(inputs_pbc)
         conv_A = tf.math.abs(conv_A)

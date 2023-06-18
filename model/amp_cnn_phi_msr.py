@@ -7,6 +7,10 @@ from tensorflow.keras import layers
 from model import Model
 
 class AmpCNNPhiMSR(Model):
+    """
+    Amplitude network: one inception layer
+    Phase network: Marshall sign rule
+    """
     def __str__(self):
         return "Amplitude network: CNN Phase: sign rule"
 

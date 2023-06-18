@@ -5,6 +5,7 @@ def get_gradient(derlogs, sample_size, eloc):
             $2Re[  <E_{loc}D^*_{W}> - <E_{loc}><D^*_{W}> ]$
             where D_W is the gradient of the neural network w.r.t to its output defined as
             $D_{W} = (1 / \Psi(x)) * (d \Psi(x) / dW)$ where W can be the weights or the biases.
+            
             Args:
                 derlogs: $D_{W}(x) = D_{W} = (1 / \Psi(x)) * (d \Psi(x) / dW) = dlog(Psi(x))/dW$
                 sample_size: the sample size

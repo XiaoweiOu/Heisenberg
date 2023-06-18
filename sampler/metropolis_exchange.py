@@ -2,7 +2,8 @@ from sampler import Sampler
 import tensorflow as tf
 import numpy as np
 import gc
-
+from tool import time_it
+import time
 
 class MetropolisExchange(Sampler):
     """
@@ -84,7 +85,7 @@ class MetropolisExchange(Sampler):
 
         return init_data
 
-    def sample_once(self, model, starting_sample, num_samples):
+    def sample_once(self, model, starting_sample, starting_wfs, num_samples):
         """
             Do a one metropolis step from a given starting samples.
             Generate [num_samples * 1] new samples. 
@@ -92,15 +93,20 @@ class MetropolisExchange(Sampler):
             Args:
                 model: the model to calculate probability |\Psi(x)|^2
                 starting_samples: the initial samples
+                starting_wfs: wave functions array of the current sample
                 num_samples: number of samples returned
             Return:
                 new samples from one metropolis exchange
+                new wave functions array
         """
+
         ## Get new configuration by flipping two random spins
         new_config = self.get_new_config(starting_sample, num_samples)
+        new_wfs = model.log_val(new_config)
 
         ## Calculate the ratio of the new configuration and old configuration probability by computing |psi(x') / psi(x)|^2
-        ratio = tf.abs(tf.exp(model.log_val_diff(new_config, starting_sample))) ** 2
+        # ratio = tf.abs(tf.exp(model.log_val_diff(new_config, starting_sample))) ** 2
+        ratio = tf.abs(tf.exp(new_wfs - starting_wfs)) ** 2
 
         ## To avoid instabilities caused by poor network generalization on the proposed configuration r, 
         ## we additionally require that |psi(x') / psi(x)|^2 <= 500
@@ -119,7 +125,9 @@ class MetropolisExchange(Sampler):
 
         ## Reject and accept samples
         sample = tf.where(accept, new_config, starting_sample)
-        return sample
+        wfs = tf.where(tf.expand_dims(accept[:,0],axis=-1), new_wfs, starting_wfs)
+
+        return sample, wfs
 
     def get_new_config(self, sample, num_samples):
         """
@@ -168,9 +176,10 @@ class MetropolisExchange(Sampler):
                 shape = [num_samples,sample_size]
         """
         sample = initial_sample
+        wfs = model.log_val(initial_sample)
         for i in range(num_steps):
-            sample = self.sample_once(model, sample, num_samples)
-            if num_steps>10 and num_steps % 10 == 0:
+            sample, wfs = self.sample_once(model, sample, wfs, num_samples)
+            if num_steps>50 and num_steps % 50 == 0:
                 gc.collect()
 
         return sample
@@ -181,8 +190,9 @@ class MetropolisExchange(Sampler):
         """
         all_samples = []
         sample = initial_sample
+        wfs = model.log_val(initial_sample)
         for i in range(num_steps):
-            sample = self.sample_once(model, sample, num_samples)
+            sample, wfs = self.sample_once(model, sample, wfs, num_samples)
             all_samples.append(sample)
 
         return all_samples

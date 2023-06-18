@@ -7,6 +7,10 @@ from tensorflow.keras import layers
 from model import Model
 
 class AmpCNNPhiPhasor(Model):
+    """
+    Amplitude network: one inception layer
+    Phase network: conv->exp(i*)->sum->angle
+    """
     def __str__(self):
         return "Amplitude network: CNN Phase: phasor(see code for details)"
 
