@@ -58,6 +58,9 @@ class KerasLearner(object):
         if self.minibatch_size == 0 or self.minibatch_size > self.sampler.num_samples:
             self.minibatch_size = self.sampler.num_samples
 
+        ## whether calculating local energy for one sample at a time.
+        self.onebyone = 'Hubbard' in self.model.__class__.__name__
+
     def learn(self):
         ## Reset array
         self.reset_memory_array()
@@ -80,11 +83,11 @@ class KerasLearner(object):
             #####################################
 
             ##### 1. Calculate local energy 
-            elocs = self.get_local_energy(self.samples)
+            elocs = self.get_local_energy(self.samples,self.model,self.onebyone)
             energy_imag, energy, energy_std, rel_error = self.process_energy_and_error(elocs)
 
             ## Post-selection of samples
-            energy_imag, energy, energy_std, rel_error = self.post_selection(epoch, energy_imag, energy, energy_std, rel_error)
+ #           energy_imag, energy, energy_std, rel_error = self.post_selection(epoch, energy_imag, energy, energy_std, rel_error)
 
             ## Confirm the current sample and append
             self.append_energy_and_error(energy,energy_std,rel_error)
@@ -119,7 +122,7 @@ class KerasLearner(object):
 
             ##### 4. Get new sample
             self.samples = self.sampler.sample(self.model, self.samples, self.minibatch_size, num_steps=self.model.num_points*10)
-
+            
             #####################################
             #####################################
             #####################################
@@ -136,24 +139,33 @@ class KerasLearner(object):
         if self.is_save is True:
             self.model.net.save('./result'+self.run_name)
 
-    def get_local_energy(self, samples):
+    def get_local_energy(self, samples, model, onebyone):
         """
             Calculate local energy from a given samples
             $E_{loc}(x) = \sum_{x'} H_{x,x'} \Psi(x') / \Psi(x)$
             In this part, we instead do $log(\Psi(x')) - log(\Psi(x))$
             Args:
+                onebyone: whether calculating local energy for one sample at a time.
                 samples: samples that we want to calculate the local energy
             Return:
                 The local energy of each given samples (complex value).
         """
-        ## Calculate $H_{x,x'}$
-        hamiltonian = self.hamiltonian.calculate_hamiltonian_matrix(samples, len(samples))
+        if onebyone == True:
+            eloc_array = []
+            for state in samples:
+                eloc = self.hamiltonian.local_energy(state,model)
+                eloc_array.append(eloc)
+            eloc_array = np.array(eloc_array)
 
-        ## Calculate $log(\Psi(x')) - log(\Psi(x))$
-        lvd = self.hamiltonian.calculate_ratio(samples, self.model, len(samples))
+        else:
+            ## Calculate $H_{x,x'}$
+            hamiltonian = self.hamiltonian.calculate_hamiltonian_matrix(samples, len(samples))
 
-        ## Sum over x'
-        eloc_array = tf.reduce_sum((tf.exp(lvd) * tf.cast(hamiltonian, tf.complex64)), axis=1, keepdims=True)
+            ## Calculate $log(\Psi(x')) - log(\Psi(x))$
+            lvd = self.hamiltonian.calculate_ratio(samples, self.model, len(samples))
+
+            ## Sum over x'
+            eloc_array = tf.reduce_sum((tf.exp(lvd) * tf.cast(hamiltonian, tf.complex64)), axis=1, keepdims=True)
 
         return eloc_array
         
@@ -169,7 +181,7 @@ class KerasLearner(object):
         np.abs(energy_imag) > alpha2 * energy_std or \
         energy_std > alpha3 * self.ground_energy_std[-1]):
             self.samples = self.sampler.sample(self.model, self.samples, self.minibatch_size, num_steps=self.model.num_points)
-            elocs = self.get_local_energy(self.samples)
+            elocs = self.get_local_energy(self.samples,self.model,self.onebyone)
             energy_imag, energy, energy_std, rel_error = self.process_energy_and_error(elocs)
 
         return energy_imag, energy, energy_std, rel_error
@@ -179,7 +191,7 @@ class KerasLearner(object):
         Save all energy values and the standard deviation of the current local energy array.
         """
         result_file = './result/'+self.run_name+'_energy.csv'
-        if os.path.isfile(result_file) == False:
+        if os.path.isfile(result_file) == False or (self.initial_sample_path == None and epoch == 0):
             csvfile = open(result_file,'w')
             csvwriter = csv.writer(csvfile)
             csvwriter.writerow(['epoch','energy','energy_std'])
@@ -190,7 +202,7 @@ class KerasLearner(object):
                 csvwriter = csv.writer(csvfile)
                 csvwriter.writerow([epoch,energy,energy_std])
 
-    def save_samples(self, samples):
+    '''def save_samples(self, samples):
         """
         Save the latest Monte Carlo sample / Markov chain.
         """
@@ -203,6 +215,17 @@ class KerasLearner(object):
         with open(initial_sample_path,'r') as csvfile:
             csvreader = csv.reader(csvfile, quoting = csv.QUOTE_NONNUMERIC)
             initial_sample = [line for line in csvreader]
+        return initial_sample'''
+
+    def save_samples(self, samples):
+        """
+        Save the latest Monte Carlo sample / Markov chain in binary format.
+        """
+        result_file = './result/'+self.run_name+'_samples.npy'
+        np.save(result_file, samples)
+
+    def load_initial_sample(self, initial_sample_path):
+        initial_sample = np.load(initial_sample_path)
         return initial_sample
 
     def process_energy_and_error(self, elocs):

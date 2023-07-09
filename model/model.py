@@ -56,6 +56,24 @@ class Model:
         # log_psi = self.net.predict(x, batch_size = self.batch_size, verbose = 0)
         log_psi = self.net(x)
         return tf.expand_dims(log_psi,axis=-1)
+    
+    def log_val_one_sample(self, x):
+        """
+            Calculate log(\Psi(x)) 
+            Args:
+                x: one configuration needed to be calculated
+        """
+        x_expand = tf.expand_dims(x,axis=0)
+        log_psi = self.net(x_expand)
+
+        ### TEST ### manually set the phase for some configs
+        if (x.numpy()==np.array([[1, 1], [1, 0], [0, 0], [0, 1]])).all() or \
+           (x.numpy()==np.array([[1, 1], [1, 0], [0, 1], [0, 0]])).all() or \
+           (x.numpy()==np.array([[1, 0], [1, 1], [0, 1], [0, 0]])).all():
+            extra = tf.complex(0.,np.pi)
+            log_psi = log_psi+extra
+
+        return log_psi
 
     def log_val_diff(self, xprime, x):
         """
@@ -66,6 +84,17 @@ class Model:
         """
         log_val_xprime = self.log_val(xprime)
         log_val_x = self.log_val(x)
+        return log_val_xprime-log_val_x
+
+    def log_val_diff_one_sample(self, xprime, x):
+        """
+            Calculate log(\Psi(x')) - log(\Psi(x))
+            Args:
+                xprime: x'
+                x: x
+        """
+        log_val_xprime = self.log_val_one_sample(xprime)
+        log_val_x = self.log_val_one_sample(x)
         return log_val_xprime-log_val_x
 
     def derlog(self, x):

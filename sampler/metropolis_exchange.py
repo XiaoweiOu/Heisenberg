@@ -171,6 +171,7 @@ class MetropolisExchange(Sampler):
                 model: model to calculate \Psi(x)
                 initial_sample: the initial sample, shape = [num_samples,sample_size]
                 num_samples: number of samples returned
+                num_steps: number of equilibration steps
             Return:
                 new samples, only the final one, no intermediate configurations
                 shape = [num_samples,sample_size]

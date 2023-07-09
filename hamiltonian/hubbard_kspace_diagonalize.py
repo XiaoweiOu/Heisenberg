@@ -24,7 +24,7 @@ def calculate_hopping_term(in_state, t_coeff):
         num = num_down + num_up # Total number of particles for this k point
         result += (np.cos(kx*2*np.pi)+np.cos(ky*2*np.pi))*num
 
-    return result * (-2) * t_coeff
+    return result * 2 * t_coeff
 
 def kindex2kvector(kindex,length):
     """
@@ -165,20 +165,32 @@ def generate_all_bases():
             all_states.append(np_state.T.tolist())
     return all_states
 
+def generate_all_bases_one_electron():
+    all_states = [[[1, 0], [0, 0], [0, 0], [0, 0]],
+    [[0, 1], [0, 0], [0, 0], [0, 0]],
+    [[0, 0], [1, 0], [0, 0], [0, 0]],
+    [[0, 0], [0, 1], [0, 0], [0, 0]],
+    [[0, 0], [0, 0], [1, 0], [0, 0]],
+    [[0, 0], [0, 0], [0, 1], [0, 0]],
+    [[0, 0], [0, 0], [0, 0], [1, 0]],
+    [[0, 0], [0, 0], [0, 0], [0, 1]]]
+    return all_states
 
-
-## Diagonalize Hamiltonian
-t_coeff, U_coeff = 1,1
-hamiltonian = np.zeros((36,36))
+##### Diagonalize Hamiltonian
 
 ## 1. Construct the Hamiltonian matrix
 all_states = generate_all_bases()
+#all_states = generate_all_bases_one_electron()
 
-## 2. Calculate the diagonal term
+## 2. Setting parameters
+t_coeff, U_coeff = 1,1
+hamiltonian = np.zeros((len(all_states),len(all_states)))
+
+## 3. Calculate the diagonal term
 for i,state in enumerate(all_states):
     hamiltonian[i][i]=calculate_hopping_term(state,t_coeff)
 
-    ## 3. Calculate the off-diagonal term
+    ## 4. Calculate the off-diagonal term
     out_states, out_hamils = calculate_coulomb_term(state,U_coeff)
     for (out_state,out_hamil) in zip(out_states,out_hamils):
         j = all_states.index(out_state)
@@ -186,8 +198,23 @@ for i,state in enumerate(all_states):
 
 assert (hamiltonian == hamiltonian.T).all()
 
+print('### INFO ### diagonal elements')
+for i,diag in enumerate(np.diagonal(hamiltonian)):
+    print(all_states[i],diag)
+
+print('### INFO ### hamiltonian matrix')
 print(hamiltonian)
 eigvals, eigvecs = np.linalg.eig(hamiltonian)
-print(np.sort(eigvals))
-# for (eigval,eigvec) in zip(eigvals,eigvecs):
-#     print(eigval,eigvec)
+zipped = zip(eigvals,eigvecs)
+result = sorted(zipped, key = lambda x:x[0])
+
+## ground state info
+print('### INFO ### ground state')
+print('E:',result[0][0])
+print('eigvec: basis --- probability --- wave function')
+eigvec_gs = result[0][1]
+# zip basis and the corresponding probability
+zipped_eigvec_gs = zip(all_states,np.real(eigvec_gs*np.conjugate(eigvec_gs)),eigvec_gs)
+sorted_eigvec_gs = sorted(zipped_eigvec_gs, key = lambda x:x[1])
+for ele in sorted_eigvec_gs[::-1]:
+    print(ele)

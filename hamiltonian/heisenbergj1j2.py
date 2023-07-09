@@ -16,7 +16,7 @@ class HeisenbergJ1J2(Hamiltonian):
     """
     def __init__(self, graph, j1=1.0, j2=0.0, total_sz = None):
         """
-        Construct an Heisenberg J1-J2 model.
+        Construct a Heisenberg J1-J2 model.
             
         Args:
             j1: magnitude of the nearest neighbor interaction along x,y,z-axis

@@ -5,10 +5,10 @@ class Sampler(object):
         self.graph = graph
 
     def get_initial_random_samples(self, sample_size, num_samples=None):
-        pass
+        raise NotImplementedError
 
     def sample(self, machine, initial_sample, num_samples, num_steps):
-        pass
+        raise NotImplementedError
 
     def set_num_samples(self, num_samples):
         self.num_samples = num_samples

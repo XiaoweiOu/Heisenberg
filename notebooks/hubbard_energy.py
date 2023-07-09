@@ -13,36 +13,35 @@ np.random.seed(22)
 tf.random.set_seed(22)
 
 from graph import Hypercube
-from hamiltonian import HeisenbergJ1J2
-from sampler import MetropolisExchange
+from hamiltonian import HeisenbergJ1J2,Hubbard
+from sampler import MetropolisExchange,MetropolisHubbard
 from functools import partial
-from model import AmpCNNPhiMSR,AmpCNNPhiPhasor,AmpCNNPhiLinear
+from model import AmpCNNPhiMSR,AmpCNNPhiPhasor,AmpCNNPhiLinear,AmpCNNPhiPhasorHubbard
 from learner import Learner,KerasLearner
 
-## Reference energy: j1=1, j2=0
-reference_energy = {'4':-11.23,'6':-24.44,'8':-43.10,'10':-67.15}
+reference_energy = {'2':-4.205,'4':-6.457}
 
 ## Define the physical system
-square2d = Hypercube(length=6, dimension=2, pbc=True, next_nearest=False)
-hamil = HeisenbergJ1J2(square2d, j1=1.0, j2=0.0, total_sz=0.0)
+square2d = Hypercube(length=2, dimension=2, pbc=True, next_nearest=False)
+hamil = Hubbard(square2d, t_coeff=1, U_coeff=8)
 
 ## Define the sampler
-sampler = MetropolisExchange(num_samples=5000, graph=square2d)
+sampler = MetropolisHubbard(num_samples=1000, num_sites=square2d.num_points)
 
 ## If load trained network and initial samples
-load_model_path = 'result/CNN_MSR_SUN6_amp_cnn_phi_linear_amp_penalty_GlorotNormal'
-initial_sample_path = 'result/CNN_MSR_SUN6_amp_cnn_phi_linear_amp_penalty_GlorotNormal_samples.csv'
+load_model_path = None #'result/AmpCNNPhiPhasorHubbard_hubbard4'
+initial_sample_path = None #'result/AmpCNNPhiPhasorHubbard_hubbard4_samples.npy'
 
 ## Define the neural networks model
-mlp = AmpCNNPhiLinear(length = square2d.length, dimension = square2d.dimension, loadpath = load_model_path)
+mlp = AmpCNNPhiPhasorHubbard(length = square2d.length, dimension = square2d.dimension, loadpath = load_model_path)
 
 ## (!! Need to set every time !!) Define the information for this run
 # current run name: could be the same as load run name
-run_name = mlp.__class__.__name__+'_SUN'+str(square2d.length)
-is_save = False
+run_name = mlp.__class__.__name__+'_hubbard'+str(square2d.length)
+is_save = True
 
 ## Define hyperparameters for learner
-learning_rate = 0.04
+learning_rate = 0.01
 optimizer = tf.keras.optimizers.SGD(learning_rate)
 stopping_threshold = 0.01
 num_epochs = 1000
