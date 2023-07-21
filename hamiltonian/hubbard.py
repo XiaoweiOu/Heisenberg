@@ -22,7 +22,7 @@ class Hubbard():
         """
         Calculate local energy for one in_state.
         """
-        eloc = 0.
+        eloc = 0
 
         ## Hopping term
         eloc += self.calculate_hopping_term(in_state)
@@ -31,7 +31,8 @@ class Hubbard():
         ## Coulomb term
         out_states, out_hamils = self.calculate_coulomb_term(in_state)
         for (out_state, out_hamil) in zip(out_states, out_hamils):
-            eloc += tf.cast(out_hamil, tf.complex64) * np.exp(model.log_val_diff_one_sample(out_state,in_state))
+            # eloc += tf.cast(out_hamil, tf.complex64) * np.exp(model.log_val_diff_one_sample(out_state,in_state))
+            eloc += tf.cast(out_hamil, tf.complex64) * model.log_val_one_sample(out_state) / model.log_val_one_sample(in_state)
 
         return eloc
 

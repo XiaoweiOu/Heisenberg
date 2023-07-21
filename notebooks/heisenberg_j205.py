@@ -20,7 +20,7 @@ from model import AmpCNNPhiMSR,AmpCNNPhiPhasor,AmpCNNPhiLinear
 from learner import Learner,KerasLearner
 
 ## Reference energy: j1=1, j2=0
-reference_energy = {'4':None,'6':-18.0,'8':None,'10':-49.56}
+reference_energy = {'4':None,'6':-18.144,'8':None,'10':-49.56}
 
 ## Define the physical system
 square2d = Hypercube(length=6, dimension=2, pbc=True, next_nearest=True)
@@ -34,7 +34,7 @@ load_model_path = None
 initial_sample_path = None 
 
 ## Define the neural networks model
-mlp = AmpCNNPhiMSR(length = square2d.length, dimension = square2d.dimension, loadpath = load_model_path)
+mlp = AmpCNNPhiPhasor(length = square2d.length, dimension = square2d.dimension, loadpath = load_model_path)
 
 ## (!! Need to set every time !!) Define the information for this run
 # current run name: could be the same as load run name

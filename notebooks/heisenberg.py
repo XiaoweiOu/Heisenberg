@@ -27,19 +27,19 @@ square2d = Hypercube(length=6, dimension=2, pbc=True, next_nearest=False)
 hamil = HeisenbergJ1J2(square2d, j1=1.0, j2=0.0, total_sz=0.0)
 
 ## Define the sampler
-sampler = MetropolisExchange(num_samples=5000, graph=square2d)
+sampler = MetropolisExchange(num_samples=2000, graph=square2d)
 
 ## If load trained network and initial samples
-load_model_path = 'result/CNN_MSR_SUN6_amp_cnn_phi_linear_amp_penalty_GlorotNormal'
-initial_sample_path = 'result/CNN_MSR_SUN6_amp_cnn_phi_linear_amp_penalty_GlorotNormal_samples.csv'
+load_model_path = None
+initial_sample_path = None
 
 ## Define the neural networks model
-mlp = AmpCNNPhiLinear(length = square2d.length, dimension = square2d.dimension, loadpath = load_model_path)
+mlp = AmpCNNPhiPhasor(length = square2d.length, dimension = square2d.dimension, loadpath = load_model_path)
 
 ## (!! Need to set every time !!) Define the information for this run
 # current run name: could be the same as load run name
 run_name = mlp.__class__.__name__+'_SUN'+str(square2d.length)
-is_save = False
+is_save = True
 
 ## Define hyperparameters for learner
 learning_rate = 0.04
@@ -50,6 +50,6 @@ num_epochs = 1000
 ## Training Process
 learner = KerasLearner(hamiltonian = hamil, model = mlp, sampler = sampler, optimizer = optimizer,
                   num_epochs = num_epochs, stopping_threshold = stopping_threshold, observables = [],
-                  reference_energy = reference_energy[str(square2d.length)], use_gradient = 'amp_penalty',
+                  reference_energy = reference_energy[str(square2d.length)], use_gradient = 'sr',
                   initial_sample_path = initial_sample_path, is_save = is_save, run_name = run_name)
 learner.learn()

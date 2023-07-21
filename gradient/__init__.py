@@ -1,3 +1,3 @@
-from .gradient import get_gradient
-from .sr import get_gradient_sr
+from .gradient import get_gradient,_test_get_gradient_distinct_config
+from .sr import get_gradient_sr,_test_get_gradient_sr_distinct_config
 from .amp_penalty import get_gradient_amp_penalty

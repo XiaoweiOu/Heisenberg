@@ -4,9 +4,39 @@ import time
 import csv
 import os
 import gc
-from gradient import get_gradient,get_gradient_sr,get_gradient_amp_penalty
+from gradient import get_gradient,get_gradient_sr,get_gradient_amp_penalty,_test_get_gradient_distinct_config,_test_get_gradient_sr_distinct_config
 
-class KerasLearner(object):
+def generate_all_bases():
+    """
+    Generate all possible basis configurations allowed by total_sz=0 and Pauli exclusion principle.
+    Half-filling
+    We will follow the order of all these bases.
+
+    Restriction: 
+        total_sz=0: num_up = num_down
+        half filling: num_particles = num_sites
+
+    Shape of each configuration=(num_particles,2)=(num_kpoints,2)
+    This is not one-hot encoding, but occupation number for each k points.
+
+    Total number of bases=(Combination^{num_particles/2}_{num_particles}) ** 2
+
+    Return:
+        all basis
+    """
+    #simple implementation for 2 by 2 lattice: C^2_4
+    C42 = [[1,1,0,0],[1,0,1,0],[1,0,0,1],[0,1,1,0],[0,1,0,1],[0,0,1,1]]
+    all_states = []
+    for ele_down in C42:
+        for ele_up in C42:
+            state=[]
+            state.append(ele_down)
+            state.append(ele_up)
+            np_state = np.array(state)
+            all_states.append(np_state.T.tolist())
+    return all_states
+
+class TestKerasLearner(object):
     def __init__(self, hamiltonian, model, sampler, optimizer, num_epochs=1000,
                  minibatch_size=0, window_period=50, reference_energy=None, stopping_threshold=0.05,
                  store_model_freq=1, observables=[], observable_freq = 0, use_gradient='sr',
@@ -65,14 +95,8 @@ class KerasLearner(object):
         ## Reset array
         self.reset_memory_array()
         
-        ## Get initial sample
-        if self.initial_sample_path is None:
-            self.samples = tf.convert_to_tensor(self.sampler.get_initial_random_samples(self.model.num_points),dtype=np.float32)
-            ## Move initial sample for thousand of times to get to the equilibrium (default = self.model.num_points*10)
-            print('===== Equilibrate initial sample start')
-            self.samples = self.sampler.sample(self.model, self.samples, self.minibatch_size, num_steps=self.model.num_points*10)
-        else:
-            self.samples = tf.convert_to_tensor(self.load_initial_sample(self.initial_sample_path),dtype=np.float32)
+        ## fixed 36 samples
+        self.samples = tf.convert_to_tensor(generate_all_bases())
 
         print ('===== Training '+ self.run_name + ' start')
         print('===== Reference energy:',self.reference_energy)
@@ -82,19 +106,29 @@ class KerasLearner(object):
             ####### TRAINING PROCESS ############
             #####################################
 
+            ##### 0. Calculate new wave functions and probability distribution
+            wfs = self.model.log_val(self.samples).numpy()
+            
+            ## Exclude small wfs
+            new_wfs = []
+            new_samples = []
+            for i,sample in enumerate(self.samples):
+                if np.abs(wfs[i])>1e-15:
+                    new_wfs.append(wfs[i])
+                    new_samples.append(sample)
+
+            wfs = np.array(new_wfs)
+            self.samples = tf.convert_to_tensor(new_samples)
+
+            ## Calculate probability distribution
+            prob = (np.conj(wfs) * wfs)/np.sum(np.conj(wfs) * wfs)
+
             ##### 1. Calculate local energy 
-            elocs = self.get_local_energy(self.samples,self.model,self.onebyone)
-            energy_imag, energy, energy_std, rel_error = self.process_energy_and_error(elocs)
-
-            ## Post-selection of samples
-            energy_imag, energy, energy_std, rel_error = self.post_selection(epoch, energy_imag, energy, energy_std, rel_error)
-
-            ## Confirm the current sample and append
-            self.append_energy_and_error(energy,energy_std,rel_error)
+            elocs = self._test_get_local_energy(self.samples,self.model,self.onebyone,prob)
+            energy, energy_std = self._test_process_energy_and_error_distinct_config(elocs,prob)
 
             ## Print status
-            print('### Epoch: %d, energy: %.4f, std: %.4f, std / mean: %.4f, relerror: %.5f' % (
-                epoch, energy, energy_std, energy_std / np.abs(energy), rel_error), end='')
+            print('### Epoch: %d, energy: %.4f, energy_std: %.4f' % (epoch, energy, energy_std), end='')
 
             ## save energy and samples
             if self.is_save is True:
@@ -107,22 +141,21 @@ class KerasLearner(object):
 
             ##### 2. Calculate gradient
             derlogs = self.model.derlog(self.samples)
+
             if self.use_gradient == 'plain':
-                grads = get_gradient(derlogs, self.minibatch_size, elocs)
+                grads = _test_get_gradient_distinct_config(derlogs, self.samples.shape[0], elocs, prob)
             elif self.use_gradient == 'sr':
-                grads = get_gradient_sr(derlogs, self.minibatch_size, elocs)
-            elif self.use_gradient == 'amp_penalty':
-                grads = get_gradient_amp_penalty(derlogs, self.minibatch_size, elocs)
+                grads = _test_get_gradient_sr_distinct_config(derlogs, self.samples.shape[0], elocs, prob, wfs)
             else:
                 print("### ERROR ### gradient type incorrect!")
                 exit(0)
 
             ##### 3. Apply gradients
             self.optimizer.apply_gradients(zip([tf.cast(grad, tf.float32) for grad in grads], self.model.net.trainable_weights))
-
-            ##### 4. Get new sample
-            self.samples = self.sampler.sample(self.model, self.samples, self.minibatch_size, num_steps=self.model.num_points*10)
             
+            ##### 4. Recover the old basis
+            self.samples = tf.convert_to_tensor(generate_all_bases())
+
             #####################################
             #####################################
             #####################################
@@ -132,14 +165,12 @@ class KerasLearner(object):
             time_interval = end - start
             self.times.append(time_interval)
 
-            print(', time: %.5f' % time_interval)
-
-        print ('===== Training finish')        
+        print ('===== Training finish')
         ## save the last data
         if self.is_save is True:
             self.model.net.save('./result/'+self.run_name)
 
-    def get_local_energy(self, samples, model, onebyone):
+    def _test_get_local_energy(self, samples, model, onebyone, prob):
         """
             Calculate local energy from a given samples
             $E_{loc}(x) = \sum_{x'} H_{x,x'} \Psi(x') / \Psi(x)$
@@ -152,8 +183,11 @@ class KerasLearner(object):
         """
         if onebyone == True:
             eloc_array = []
-            for state in samples:
-                eloc = self.hamiltonian.local_energy(state,model)
+            for i,state in enumerate(samples):
+                if prob[i] < 1e-15:
+                    eloc = [0.j]
+                else:
+                    eloc = self.hamiltonian.local_energy(state,model)
                 eloc_array.append(eloc)
             eloc_array = np.array(eloc_array)
 
@@ -202,21 +236,6 @@ class KerasLearner(object):
                 csvwriter = csv.writer(csvfile)
                 csvwriter.writerow([epoch,energy,energy_std])
 
-    '''def save_samples(self, samples):
-        """
-        Save the latest Monte Carlo sample / Markov chain.
-        """
-        result_file = './result/'+self.run_name+'_samples.csv'
-        with open(result_file,'w') as csvfile:
-            csvwriter = csv.writer(csvfile)
-            csvwriter.writerows(samples)
-
-    def load_initial_sample(self, initial_sample_path):
-        with open(initial_sample_path,'r') as csvfile:
-            csvreader = csv.reader(csvfile, quoting = csv.QUOTE_NONNUMERIC)
-            initial_sample = [line for line in csvreader]
-        return initial_sample'''
-
     def save_samples(self, samples):
         """
         Save the latest Monte Carlo sample / Markov chain in binary format.
@@ -248,6 +267,20 @@ class KerasLearner(object):
             rel_error = np.abs((ground_energy - self.reference_energy) / self.reference_energy)
 
         return ground_energy_imag, ground_energy, ground_energy_std, rel_error
+
+    def _test_process_energy_and_error_distinct_config(self, elocs, prob):
+        """
+            Process the energy and error by calculating the energy, energy over windows and relative error.
+            Note that here samples only include distinct configurations,
+            so we can't simply average elocs.
+            |psi(x)|^2 is used to calculate weight.
+            Args:
+                elocs: the local energies array of one epoch
+                wfs: psi(x) array
+        """
+        energy = np.sum(prob*elocs)
+        energy_std = np.sqrt(np.sum(prob*elocs*elocs) - energy * energy)
+        return np.real(energy),np.real(energy_std)
 
     def append_energy_and_error(self,ground_energy,ground_energy_std,rel_error):
         self.ground_energy.append(ground_energy)

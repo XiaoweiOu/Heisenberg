@@ -139,6 +139,7 @@ def calculate_coulomb_term(in_state, U_coeff):
 def generate_all_bases():
     """
     Generate all possible basis configurations allowed by total_sz=0 and Pauli exclusion principle.
+    Half-filling
     We will follow the order of all these bases.
 
     Restriction: 
@@ -183,7 +184,7 @@ all_states = generate_all_bases()
 #all_states = generate_all_bases_one_electron()
 
 ## 2. Setting parameters
-t_coeff, U_coeff = 1,1
+t_coeff, U_coeff = 1,8
 hamiltonian = np.zeros((len(all_states),len(all_states)))
 
 ## 3. Calculate the diagonal term
@@ -200,12 +201,15 @@ assert (hamiltonian == hamiltonian.T).all()
 
 print('### INFO ### diagonal elements')
 for i,diag in enumerate(np.diagonal(hamiltonian)):
-    print(all_states[i],diag)
+    print(i,all_states[i],diag)
 
 print('### INFO ### hamiltonian matrix')
 print(hamiltonian)
+
+## The column eigenvectors[:,i] is corresponding to the eigenvalue[i].
+## not row!
 eigvals, eigvecs = np.linalg.eig(hamiltonian)
-zipped = zip(eigvals,eigvecs)
+zipped = zip(eigvals,eigvecs.T)
 result = sorted(zipped, key = lambda x:x[0])
 
 ## ground state info

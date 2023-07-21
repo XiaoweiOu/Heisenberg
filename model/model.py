@@ -53,7 +53,6 @@ class Model:
             Args:
                 x: the configuration needed to be calculated
         """
-        # log_psi = self.net.predict(x, batch_size = self.batch_size, verbose = 0)
         log_psi = self.net(x)
         return tf.expand_dims(log_psi,axis=-1)
     
@@ -66,13 +65,83 @@ class Model:
         x_expand = tf.expand_dims(x,axis=0)
         log_psi = self.net(x_expand)
 
-        ### TEST ### manually set the phase for some configs
-        if (x.numpy()==np.array([[1, 1], [1, 0], [0, 0], [0, 1]])).all() or \
-           (x.numpy()==np.array([[1, 1], [1, 0], [0, 1], [0, 0]])).all() or \
-           (x.numpy()==np.array([[1, 0], [1, 1], [0, 1], [0, 0]])).all():
-            extra = tf.complex(0.,np.pi)
-            log_psi = log_psi+extra
-
+        ### TEST ### fix log_psi to be the true values
+        '''
+        if (x.numpy()==np.array( [[1, 1], [1, 1], [0, 0], [0, 0]] )).all():
+            log_psi = tf.math.log(tf.complex( 0.6518541365441228 ,0.))
+        elif (x.numpy()==np.array( [[1, 1], [1, 0], [0, 1], [0, 0]] )).all():
+            log_psi = tf.math.log(tf.complex( 6.767733036407472e-17 ,0.))
+        elif (x.numpy()==np.array( [[1, 1], [1, 0], [0, 0], [0, 1]] )).all():
+            log_psi = tf.math.log(tf.complex( -1.1311674610826102e-16 ,0.))
+        elif (x.numpy()==np.array( [[1, 0], [1, 1], [0, 1], [0, 0]] )).all():
+            log_psi = tf.math.log(tf.complex( -3.0970033528162176e-17 ,0.))
+        elif (x.numpy()==np.array( [[1, 0], [1, 1], [0, 0], [0, 1]] )).all():
+            log_psi = tf.math.log(tf.complex( 1.480707202293723e-16 ,0.))
+        elif (x.numpy()==np.array( [[1, 0], [1, 0], [0, 1], [0, 1]] )).all():
+            log_psi = tf.math.log(tf.complex( 0.09719277761097418 ,0.))
+        elif (x.numpy()==np.array( [[1, 1], [0, 1], [1, 0], [0, 0]] )).all():
+            log_psi = tf.math.log(tf.complex( 4.368834750980412e-17 ,0.))
+        elif (x.numpy()==np.array( [[1, 1], [0, 0], [1, 1], [0, 0]] )).all():
+            log_psi = tf.math.log(tf.complex( -0.13567449484666533 ,0.))
+        elif (x.numpy()==np.array( [[1, 1], [0, 0], [1, 0], [0, 1]] )).all():
+            log_psi = tf.math.log(tf.complex( -1.4083641444028257e-32 ,0.))
+        elif (x.numpy()==np.array( [[1, 0], [0, 1], [1, 1], [0, 0]] )).all():
+            log_psi = tf.math.log(tf.complex( -5.134239975171319e-33 ,0.))
+        elif (x.numpy()==np.array( [[1, 0], [0, 1], [1, 0], [0, 1]] )).all():
+            log_psi = tf.math.log(tf.complex( 0.09719277761097418 ,0.))
+        elif (x.numpy()==np.array( [[1, 0], [0, 0], [1, 1], [0, 1]] )).all():
+            log_psi = tf.math.log(tf.complex( -2.499261495161532e-17 ,0.))
+        elif (x.numpy()==np.array( [[1, 1], [0, 1], [0, 0], [1, 0]] )).all():
+            log_psi = tf.math.log(tf.complex( -2.7754728645695526e-17 ,0.))
+        elif (x.numpy()==np.array( [[1, 1], [0, 0], [0, 1], [1, 0]] )).all():
+            log_psi = tf.math.log(tf.complex( -1.3124047078228165e-33 ,0.))
+        elif (x.numpy()==np.array( [[1, 1], [0, 0], [0, 0], [1, 1]] )).all():
+            log_psi = tf.math.log(tf.complex( -1.1417299728387712e-17 ,0.))
+        elif (x.numpy()==np.array( [[1, 0], [0, 1], [0, 1], [1, 0]] )).all():
+            log_psi = tf.math.log(tf.complex( -0.19438555522194872 ,0.))
+        elif (x.numpy()==np.array( [[1, 0], [0, 1], [0, 0], [1, 1]] )).all():
+            log_psi = tf.math.log(tf.complex( 3.522740024861627e-33 ,0.))
+        elif (x.numpy()==np.array( [[1, 0], [0, 0], [0, 1], [1, 1]] )).all():
+            log_psi = tf.math.log(tf.complex( 1.4523414059035787e-17 ,0.))
+        elif (x.numpy()==np.array( [[0, 1], [1, 1], [1, 0], [0, 0]] )).all():
+            log_psi = tf.math.log(tf.complex( -2.81004076602937e-17 ,0.))
+        elif (x.numpy()==np.array( [[0, 1], [1, 0], [1, 1], [0, 0]] )).all():
+            log_psi = tf.math.log(tf.complex( -1.7104578436645768e-33 ,0.))
+        elif (x.numpy()==np.array( [[0, 1], [1, 0], [1, 0], [0, 1]] )).all():
+            log_psi = tf.math.log(tf.complex( -0.1943855552219487 ,0.))
+        elif (x.numpy()==np.array( [[0, 0], [1, 1], [1, 1], [0, 0]] )).all():
+            log_psi = tf.math.log(tf.complex( -1.1417299728387712e-17 ,0.))
+        elif (x.numpy()==np.array( [[0, 0], [1, 1], [1, 0], [0, 1]] )).all():
+            log_psi = tf.math.log(tf.complex( 3.5007792558727506e-33 ,0.))
+        elif (x.numpy()==np.array( [[0, 0], [1, 0], [1, 1], [0, 1]] )).all():
+            log_psi = tf.math.log(tf.complex( 1.3853099321371073e-17 ,0.))
+        elif (x.numpy()==np.array( [[0, 1], [1, 1], [0, 0], [1, 0]] )).all():
+            log_psi = tf.math.log(tf.complex( 1.057895769000228e-16 ,0.))
+        elif (x.numpy()==np.array( [[0, 1], [1, 0], [0, 1], [1, 0]] )).all():
+            log_psi = tf.math.log(tf.complex( 0.09719277761097417 ,0.))
+        elif (x.numpy()==np.array( [[0, 1], [1, 0], [0, 0], [1, 1]] )).all():
+            log_psi = tf.math.log(tf.complex( 2.645714947425075e-33 ,0.))
+        elif (x.numpy()==np.array( [[0, 0], [1, 1], [0, 1], [1, 0]] )).all():
+            log_psi = tf.math.log(tf.complex( 2.6202689248838836e-33 ,0.))
+        elif (x.numpy()==np.array( [[0, 0], [1, 1], [0, 0], [1, 1]] )).all():
+            log_psi = tf.math.log(tf.complex( -0.6518541365441235 ,0.))
+        elif (x.numpy()==np.array( [[0, 0], [1, 0], [0, 1], [1, 1]] )).all():
+            log_psi = tf.math.log(tf.complex( -4.415313286242046e-17 ,0.))
+        elif (x.numpy()==np.array( [[0, 1], [0, 1], [1, 0], [1, 0]] )).all():
+            log_psi = tf.math.log(tf.complex( 0.09719277761097417 ,0.))
+        elif (x.numpy()==np.array( [[0, 1], [0, 0], [1, 1], [1, 0]] )).all():
+            log_psi = tf.math.log(tf.complex( -2.1640019305810062e-17 ,0.))
+        elif (x.numpy()==np.array( [[0, 1], [0, 0], [1, 0], [1, 1]] )).all():
+            log_psi = tf.math.log(tf.complex( 1.0395441726756677e-17 ,0.))
+        elif (x.numpy()==np.array( [[0, 0], [0, 1], [1, 1], [1, 0]] )).all():
+            log_psi = tf.math.log(tf.complex( 1.0395441726756677e-17 ,0.))
+        elif (x.numpy()==np.array( [[0, 0], [0, 1], [1, 0], [1, 1]] )).all():
+            log_psi = tf.math.log(tf.complex( -3.582380509639454e-17 ,0.))
+        elif (x.numpy()==np.array( [[0, 0], [0, 0], [1, 1], [1, 1]] )).all():
+            log_psi = tf.math.log(tf.complex( 0.1356744948466655 ,0.))
+        log_psi = tf.expand_dims(log_psi,axis=0)
+        '''
+        
         return log_psi
 
     def log_val_diff(self, xprime, x):

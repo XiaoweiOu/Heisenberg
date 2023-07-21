@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import csv
 import numpy as np
 
-result_file = 'result/AmpCNNPhiPhasorHubbard_hubbard4_energy.csv'
+result_file = 'result/AmpCNNPhiPhasor_SUN6_mass4_energy.csv'
 epoch = []
 energy = []
 with open(result_file,'r') as csvfile:
@@ -13,7 +13,7 @@ with open(result_file,'r') as csvfile:
         energy.append(float(row[1]))
 
 plt.plot(energy)
-plt.xlabel('epoch')
+plt.xlabel('iteration')
 plt.ylabel('energy')
 plt.text(len(energy)*0.5,energy[0],"<E> in the last 10 epochs: %.3f" % (np.mean(energy[-10:])))
 plt.savefig('./draw/energy.jpg')
