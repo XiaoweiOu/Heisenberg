@@ -82,12 +82,12 @@ class KerasLearner(object):
             ####### TRAINING PROCESS ############
             #####################################
 
-            ##### 1. Calculate local energy 
+            ##### 1. Calculate local energy
             elocs = self.get_local_energy(self.samples,self.model,self.onebyone)
             energy_imag, energy, energy_std, rel_error = self.process_energy_and_error(elocs)
 
             ## Post-selection of samples
-            energy_imag, energy, energy_std, rel_error = self.post_selection(epoch, energy_imag, energy, energy_std, rel_error)
+            # energy_imag, energy, energy_std, rel_error = self.post_selection(epoch, energy_imag, energy, energy_std, rel_error)
 
             ## Confirm the current sample and append
             self.append_energy_and_error(energy,energy_std,rel_error)
@@ -131,10 +131,9 @@ class KerasLearner(object):
             end = time.time()
             time_interval = end - start
             self.times.append(time_interval)
-
             print(', time: %.5f' % time_interval)
 
-        print ('===== Training finish')        
+        print ('===== Training finish')
         ## save the last data
         if self.is_save is True:
             self.model.net.save('./result/'+self.run_name)
@@ -176,7 +175,7 @@ class KerasLearner(object):
         ## |Im[E(epoch)]|< alpha2 * energy_std[epoch]
         ## energy_std[epoch] < alpha3 * energy_std[epoch-1]
         """
-        alpha1, alpha2, alpha3 = 8,5,6
+        alpha1, alpha2, alpha3 = 3,5,6
         while epoch >= 1 and (np.abs(energy - self.ground_energy[-1]) > alpha1 or \
         np.abs(energy_imag) > alpha2 * energy_std or \
         energy_std > alpha3 * self.ground_energy_std[-1]):

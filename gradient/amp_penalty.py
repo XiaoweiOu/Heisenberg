@@ -20,9 +20,12 @@ def get_gradient_amp_penalty(derlogs, sample_size, eloc):
         all_derlogs_mean = tf.reduce_mean(all_derlogs, axis=0, keepdims=True)
 
         ## Calculate G_ij = < mass**2 * Re[O_i(sk)] Re[O_j(sk)] + Im[O_i(sk)] Im[O_j(sk)] >
-        mass = 4.
+        #                   - mass**2 * <Re[O_i(sk)]> * <Re[O_j(sk)]> - <Im[O_i(sk)]> * <Im[O_j(sk)]>
+        mass = 6.
         all_derlogs_derlogs_mean = (mass*mass * tf.einsum('ki, kj->ij', tf.math.real(all_derlogs), tf.math.real(all_derlogs)) \
-                    +tf.einsum('ki, kj->ij', tf.math.imag(all_derlogs), tf.math.imag(all_derlogs)) )/ sample_size
+                + tf.einsum('ki, kj->ij', tf.math.imag(all_derlogs), tf.math.imag(all_derlogs)) )/ sample_size \
+                - mass*mass * tf.math.real(tf.transpose(all_derlogs_mean)) * tf.math.real(all_derlogs_mean) \
+                - tf.math.imag(tf.transpose(all_derlogs_mean)) * tf.math.imag(all_derlogs_mean)
 
         G_ij = all_derlogs_derlogs_mean
         G_ij = tf.cast(G_ij,tf.complex64)
