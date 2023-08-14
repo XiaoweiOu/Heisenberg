@@ -38,13 +38,22 @@ class Model:
         """
         raise NotImplementedError
 
+    # def PBCs(self,inputs,padding):
+    #     """
+    #     apply periodic boundary condition to the input lattice
+    #     padding = int((kernel_size-1)/2)
+    #     """
+    #     inputs_pc = layers.Concatenate(axis=1)([inputs[:,-padding:,:,:],inputs,inputs[:,:padding,:,:]])
+    #     inputs_pc = layers.Concatenate(axis=2)([inputs_pc[:,:,-padding:,:],inputs_pc,inputs_pc[:,:,:padding,:]])
+    #     return inputs_pc
+
     def PBCs(self,inputs,padding):
         """
-        apply periodic boundary condition to the input lattice
-        padding = int((kernel_size-1)/2)
+        apply periodic boundary condition to one side of the input lattice
+        padding = kernel_size-1
         """
-        inputs_pc = layers.Concatenate(axis=1)([inputs[:,-padding:,:,:],inputs,inputs[:,:padding,:,:]])
-        inputs_pc = layers.Concatenate(axis=2)([inputs_pc[:,:,-padding:,:],inputs_pc,inputs_pc[:,:,:padding,:]])
+        inputs_pc = layers.Concatenate(axis=1)([inputs,inputs[:,:padding,:,:]])
+        inputs_pc = layers.Concatenate(axis=2)([inputs_pc,inputs_pc[:,:,:padding,:]])
         return inputs_pc
 
     def log_val(self, x):

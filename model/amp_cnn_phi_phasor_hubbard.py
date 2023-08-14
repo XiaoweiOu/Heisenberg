@@ -43,6 +43,7 @@ class AmpCNNPhiPhasorHubbard(Model):
         """
         Calculate $D_{W}(x) = D_{W} = (1 / \Psi(x)) * (d \Psi(x) / dW) = dlog(Psi(x))/dW$ where W can be the weights or the biases.
         """
+        ## Note that the network output here is wfs instead of log_psi!!!
         with tf.GradientTape(persistent=True) as g:
             wfs = self.net(x)
             log_psi = tf.math.log(wfs)

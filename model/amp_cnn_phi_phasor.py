@@ -33,8 +33,8 @@ class AmpCNNPhiPhasor(Model):
             """
 
             initializer = tf.keras.initializers.HeNormal()
-            inputs_3 = self.PBCs(inputs,padding=int((3-1)/2))#kernel_size=3
-            inputs_5 = self.PBCs(inputs,padding=int((5-1)/2))#kernel_size=5
+            inputs_3 = self.PBCs(inputs,padding=2)#kernel_size=3
+            inputs_5 = self.PBCs(inputs,padding=4)#kernel_size=5
         
             # dropout rate is suggested to between 0.2 and 0.5
             conv3 = layers.Conv2D(num_channels, kernel_size=3, padding='VALID', name=name+'_incep_3',kernel_initializer=initializer, activation='relu')(inputs_3)
@@ -55,7 +55,7 @@ class AmpCNNPhiPhasor(Model):
 
         ## phase
         # phasor: a regular cnn layer for phi
-        input_phi = self.PBCs(inputs_re,padding=int((7-1)/2))#kernel_size=7
+        input_phi = self.PBCs(inputs_re,padding=6)#kernel_size=7
         convPhi = layers.Conv2D(filters=24, kernel_size=7, padding='VALID', name='convPhi_1',kernel_initializer=tf.keras.initializers.RandomNormal(mean=1.0, stddev=1.0),activation=None)(input_phi)
         out1 = tf.math.exp(tf.complex(0.,convPhi))
         out2 = tf.math.reduce_sum(out1,axis=[-1,-2,-3])

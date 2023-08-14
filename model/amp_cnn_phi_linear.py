@@ -33,8 +33,8 @@ class AmpCNNPhiLinear(Model):
             """
 
             initializer = tf.keras.initializers.HeNormal()
-            inputs_3 = self.PBCs(inputs,padding=int((3-1)/2))#kernel_size=3
-            inputs_5 = self.PBCs(inputs,padding=int((5-1)/2))#kernel_size=5
+            inputs_3 = self.PBCs(inputs,padding=2)#kernel_size=3
+            inputs_5 = self.PBCs(inputs,padding=4)#kernel_size=5
         
             # dropout rate is suggested to between 0.2 and 0.5
             conv3 = layers.Conv2D(num_channels, kernel_size=3, padding='VALID', name=name+'_incep_3',kernel_initializer=initializer, activation='relu')(inputs_3)
@@ -47,7 +47,7 @@ class AmpCNNPhiLinear(Model):
             outputs = layers.Concatenate(axis=3)([conv3, conv5, max3])
             return outputs
         
-        inputs_pbc = self.PBCs(inputs_re,padding=int((5-1)/2))#kernel_size=5
+        inputs_pbc = self.PBCs(inputs_re,padding=4)#kernel_size=5
         conv_A = layers.Conv2D(filters=16, kernel_size=5, padding='VALID', name='conv_amp', kernel_initializer=tf.keras.initializers.GlorotNormal(), activation='relu')(inputs_pbc)
         conv_A = tf.math.abs(conv_A)
         pool_A,A_indices = tf.math.top_k(conv_A, k=1)

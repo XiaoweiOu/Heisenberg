@@ -6,13 +6,13 @@ from tensorflow import keras
 from tensorflow.keras import layers
 from model import Model
 
-class AmpCNNPhiMSR(Model):
+class AmpCNNPhiMultiLinear(Model):
     """
-    Amplitude network: one inception layer
-    Phase network: Marshall sign rule
+    Amplitude network: one CNN layer(16;5*5;GlorotNormal)
+    Phase network: one dense layer(RandomNormal initializer)
     """
     def __str__(self):
-        return "Amplitude network: CNN Phase: sign rule"
+        return "Amplitude network: CNN Phase: linear layer"
 
     def create_model(self,length,dimension):
         """
@@ -42,35 +42,29 @@ class AmpCNNPhiMSR(Model):
             conv5 = layers.Conv2D(num_channels, kernel_size=5, padding='VALID', name=name+'_incep_5',kernel_initializer=initializer, activation='relu')(inputs_5)
             conv5 = layers.Dropout(rate=0.2)(conv5)
             max3 = layers.MaxPooling2D((3,3), strides=(1,1), padding='VALID',name=name+'max_3')(inputs_3)
-
+       
             # concatenate final outputs
             outputs = layers.Concatenate(axis=3)([conv3, conv5, max3])
             return outputs
-
-        incep_A = inception(inputs_re,name='amp_inception',num_channels=10)
-        pool_A,A_indices = tf.math.top_k(incep_A, k=1)
-        pool_A = tf.math.reduce_mean(pool_A,axis=-1)
-        pool_A = layers.Flatten()(pool_A)
-        lnA = tf.math.reduce_sum(pool_A,axis=1)
+        
+        inputs_pbc = self.PBCs(inputs_re,padding=5)#kernel_size=6
+        conv_A = layers.Conv2D(filters=64, kernel_size=6, padding='VALID', name='conv_amp', kernel_initializer=tf.keras.initializers.GlorotNormal(), activation='relu')(inputs_pbc)
+        conv_A = tf.math.abs(conv_A)
+        pool_A,A_indices = tf.math.top_k(conv_A, k=1)
+        lnA = tf.math.reduce_sum(pool_A,axis=[-1,-2,-3])
 
         ## phase
-        # Marshall sign rule
-        def marshall(x):
-            batch_size=tf.shape(x)[0]
-            indices=[]
-            for i in range(length):
-                for j in range(length):
-                    if i%2==0 and j%2==0:
-                        indices.append([i,j])
-                    if i%2==1 and j%2==1:
-                        indices.append([i,j])
-            indices=tf.expand_dims(indices,axis=0)
-            indices=tf.tile(indices,[batch_size,1,1])
-            gather=tf.gather_nd(params=x[:,:,:,0],indices=indices,batch_dims=1)
-            gather = (-gather+1)/2
-            return tf.math.reduce_sum(gather,axis=1)*np.pi
-        
-        phi = layers.Lambda(function=marshall)(inputs_re)
+        # a simple linear function
+        def msr_init(shape, dtype = None):
+            indices = tf.constant([[i*length+j] for i in range(length) for j in range(length) if (i%2==0 and j%2==0) or (i%2==1 and j%2==1)])
+            updates = tf.constant([np.pi]*(shape[0]//2))
+            updates = tf.expand_dims(updates,axis=-1)
+            msr_weights = tf.scatter_nd(indices, updates, shape)
+            return msr_weights
+
+        dense1_phi = layers.Dense(units=64, activation='relu', name = 'dense1_phi')(inputs)
+        dense2_phi = layers.Dense(units=64, activation='relu', name = 'dense2_phi')(dense1_phi)
+        phi = tf.reduce_sum(dense2_phi,axis=-1)
 
         ## output
         # stack the values for output
