@@ -20,10 +20,11 @@ class Model:
         net: keras model object
         """
         self.batch_size = 2000
-        self.num_points = length ** dimension
+        self.length = length
+        self.dimension = dimension
         
         if loadpath == None:
-            self.net = self.create_model(length,dimension)
+            self.net = self.create_model()
             self.net.compile()
         else:
             self.net = tf.keras.models.load_model(loadpath)
@@ -75,33 +76,23 @@ class Model:
         log_psi = self.net(x_expand)
         return log_psi
 
-    def log_val_symmetrized(self, x):
+    def log_val_symmetrized(self, x, symmetry):
         """
             Calculate log(\Psi(x)) with c4v symmetry
             log(\Psi(x)) = log(1/|S| \sum_{x' \in S} exp(net(x')))
             |S|=8
         """
-        order_c4v = 8
-
         ## identity operation
         sum = tf.math.exp(self.net(x))
         
         ## other operations
-        for i in range(order_c4v-1):
-            x_new = transform(x,i)
+        for i in range(symmetry.order-1):
+            x_new = symmetry.transform(x,i)
             sum += tf.math.exp(self.net(x_new))
 
         ## output
-        log_psi = tf.math.log(1/order_c4v * sum)
+        log_psi = tf.math.log(1/symmetry.order * sum)
         return tf.expand_dim(log_psi,axis=-1)
-
-    def transform(self, x, idx):
-        """
-            Transform a few configurations under c4v group
-            Args:
-                idx: index of the group operation (1-7 for c4v group)
-        """
-        
     
     def log_val_diff(self, xprime, x):
         """
@@ -125,12 +116,38 @@ class Model:
         log_val_x = self.log_val_one_sample(x)
         return log_val_xprime-log_val_x
 
+    def log_val_diff_symmetrized(self, xprime, x):
+        """
+            Calculate log(\Psi(x')) - log(\Psi(x))
+            Args:
+                xprime: x'
+                x: x
+        """
+        log_val_xprime = self.log_val_symmetrized(xprime)
+        log_val_x = self.log_val_symmetrized(x)
+        return log_val_xprime-log_val_x
+
     def derlog(self, x):
         """
         Calculate $D_{W}(x) = D_{W} = (1 / \Psi(x)) * (d \Psi(x) / dW) = dlog(Psi(x))/dW$ where W can be the weights or the biases.
         """
         with tf.GradientTape(persistent=True) as g:
             log_psi = self.net(x)
+            real_psi = tf.math.real(log_psi)
+            imag_psi = tf.math.imag(log_psi)
+
+        #Not using vectorized calculation (pfor = Flase) can prevent the excessiv memory consumption.
+        real_jacobians = g.jacobian(real_psi, self.net.trainable_variables, parallel_iterations = 10000, experimental_use_pfor = False)
+        imag_jacobians = g.jacobian(imag_psi, self.net.trainable_variables, parallel_iterations = 10000, experimental_use_pfor = False)
+
+        return [tf.complex(real_jacobians[i], imag_jacobians[i]) for i in range(len(real_jacobians))]
+    
+    def derlog_symmetrized(self, x):
+        """
+        Calculate $D_{W}(x) = D_{W} = (1 / \Psi(x)) * (d \Psi(x) / dW) = dlog(Psi(x))/dW$ where W can be the weights or the biases.
+        """
+        with tf.GradientTape(persistent=True) as g:
+            log_psi = self.log_val_symmetrized(x) ##(TODO)is the dimension correct?
             real_psi = tf.math.real(log_psi)
             imag_psi = tf.math.imag(log_psi)
 

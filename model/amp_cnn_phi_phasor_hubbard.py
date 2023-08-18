@@ -14,13 +14,13 @@ class AmpCNNPhiPhasorHubbard(Model):
     def __str__(self):
         return "Amplitude network: CNN Phase: linear layer"
 
-    def create_model(self,length,dimension):
+    def create_model(self):
         """
         Create a cnn for the wave funtion.
         Return: log(psi)=lnA+i*phi
         """
         ## reshape input to be 2D data
-        inputs = tf.keras.Input(shape=(length ** dimension,2),dtype=tf.float64)
+        inputs = tf.keras.Input(shape=(self.length ** self.dimension,2),dtype=tf.float64)
         inputs_flt = layers.Flatten()(inputs)
         
         ## amplitude

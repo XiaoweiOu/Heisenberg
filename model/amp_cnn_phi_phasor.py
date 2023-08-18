@@ -14,14 +14,14 @@ class AmpCNNPhiPhasor(Model):
     def __str__(self):
         return "Amplitude network: CNN Phase: phasor(see code for details)"
 
-    def create_model(self,length,dimension):
+    def create_model(self):
         """
         Create a cnn for the wave funtion.
         Return: log(psi)=lnA+i*phi
         """
         ## reshape input to be 2D data
-        inputs = tf.keras.Input(shape=(length ** dimension,),dtype=tf.float64)
-        inputs_re = layers.Reshape((length,length),input_shape=(length ** dimension,))(inputs)
+        inputs = tf.keras.Input(shape=(self.length ** self.dimension,),dtype=tf.float64)
+        inputs_re = layers.Reshape((self.length,self.length),input_shape=(self.length ** self.dimension,))(inputs)
 
         ## expand a dimension for feature at the end
         inputs_re = tf.expand_dims(inputs_re,-1)

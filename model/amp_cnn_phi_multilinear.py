@@ -14,14 +14,14 @@ class AmpCNNPhiMultiLinear(Model):
     def __str__(self):
         return "Amplitude network: CNN Phase: linear layer"
 
-    def create_model(self,length,dimension):
+    def create_model(self):
         """
         Create a cnn for the wave funtion.
         Return: log(psi)=lnA+i*phi
         """
         ## reshape input to be 2D data
-        inputs = tf.keras.Input(shape=(length ** dimension,),dtype=tf.float64)
-        inputs_re = layers.Reshape((length,length),input_shape=(length ** dimension,))(inputs)
+        inputs = tf.keras.Input(shape=(self.length ** self.dimension,),dtype=tf.float64)
+        inputs_re = layers.Reshape((self.length,self.length),input_shape=(self.length ** self.dimension,))(inputs)
 
         ## expand a dimension for feature at the end
         inputs_re = tf.expand_dims(inputs_re,-1)
@@ -56,7 +56,7 @@ class AmpCNNPhiMultiLinear(Model):
         ## phase
         # a simple linear function
         def msr_init(shape, dtype = None):
-            indices = tf.constant([[i*length+j] for i in range(length) for j in range(length) if (i%2==0 and j%2==0) or (i%2==1 and j%2==1)])
+            indices = tf.constant([[i*self.length+j] for i in range(self.length) for j in range(self.length) if (i%2==0 and j%2==0) or (i%2==1 and j%2==1)])
             updates = tf.constant([np.pi]*(shape[0]//2))
             updates = tf.expand_dims(updates,axis=-1)
             msr_weights = tf.scatter_nd(indices, updates, shape)
