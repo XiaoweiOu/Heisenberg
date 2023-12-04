@@ -14,14 +14,14 @@ class AmpCNNPhiMSR(Model):
     def __str__(self):
         return "Amplitude network: CNN Phase: sign rule"
 
-    def create_model(self):
+    def create_model(self,length,dimension):
         """
         Create a cnn for the wave funtion.
         Return: log(psi)=lnA+i*phi
         """
         ## reshape input to be 2D data
-        inputs = tf.keras.Input(shape=(self.length ** self.dimension,),dtype=tf.float64)
-        inputs_re = layers.Reshape((self.length,self.length),input_shape=(self.length ** self.dimension,))(inputs)
+        inputs = tf.keras.Input(shape=(length ** dimension,),dtype=tf.float64)
+        inputs_re = layers.Reshape((length,length),input_shape=(length ** dimension,))(inputs)
 
         ## expand a dimension for feature at the end
         inputs_re = tf.expand_dims(inputs_re,-1)
@@ -43,6 +43,8 @@ class AmpCNNPhiMSR(Model):
             conv5 = layers.Dropout(rate=0.2)(conv5)
             max3 = layers.MaxPooling2D((3,3), strides=(1,1), padding='VALID',name=name+'max_3')(inputs_3)
 
+            self.num_param_amp = (3*3+1)*num_channels + (5*5+1)*num_channels
+
             # concatenate final outputs
             outputs = layers.Concatenate(axis=3)([conv3, conv5, max3])
             return outputs
@@ -58,8 +60,8 @@ class AmpCNNPhiMSR(Model):
         def marshall(x):
             batch_size=tf.shape(x)[0]
             indices=[]
-            for i in range(self.length):
-                for j in range(self.length):
+            for i in range(length):
+                for j in range(length):
                     if i%2==0 and j%2==0:
                         indices.append([i,j])
                     if i%2==1 and j%2==1:

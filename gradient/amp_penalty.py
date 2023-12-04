@@ -1,5 +1,6 @@
 import tensorflow as tf
-def get_gradient_amp_penalty(derlogs, sample_size, eloc):
+import numpy as np
+def get_gradient_amp_penalty(derlogs, sample_size, eloc, num_param_amp):
         """
             Calculate the gradient of E[\Psi] using the modifed stochastic reconfiguration with mass term
             G_ij = < mass**2 * Re[O_i(sk)] Re[O_j(sk)] + Im[O_i(sk)] Im[O_j(sk)] >
@@ -21,7 +22,7 @@ def get_gradient_amp_penalty(derlogs, sample_size, eloc):
 
         ## Calculate G_ij = < mass**2 * Re[O_i(sk)] Re[O_j(sk)] + Im[O_i(sk)] Im[O_j(sk)] >
         #                   - mass**2 * <Re[O_i(sk)]> * <Re[O_j(sk)]> - <Im[O_i(sk)]> * <Im[O_j(sk)]>
-        mass = 6.
+        mass = 4.
         all_derlogs_derlogs_mean = (mass*mass * tf.einsum('ki, kj->ij', tf.math.real(all_derlogs), tf.math.real(all_derlogs)) \
                 + tf.einsum('ki, kj->ij', tf.math.imag(all_derlogs), tf.math.imag(all_derlogs)) )/ sample_size \
                 - mass*mass * tf.math.real(tf.transpose(all_derlogs_mean)) * tf.math.real(all_derlogs_mean) \
@@ -47,9 +48,28 @@ def get_gradient_amp_penalty(derlogs, sample_size, eloc):
         ## Calculate gradient $2Re[  <E_{loc}D^*_{W}> - <E_{loc}><D^*_{W}> ]$
         grad = 2 * tf.cast(tf.math.real(ed - eloc_mean * tf.math.conj(derlog_mean)), tf.complex64)
 
+        ## Save norm of raw gradient
+        grad_norm = [] #order : grad_amp_before, grad_phi_before, grad_amp_after, grad_phi_after
+        grad_norm.append(np.real(tf.norm(grad[:,:num_param_amp]).numpy()))
+        grad_norm.append(np.real(tf.norm(grad[:,num_param_amp:]).numpy()))
+
         ##### 3. Calculated modified gradient
         ## inv(G_ij) * grad == final_grads or G_ij * final_grads == grad
         final_grads = tf.linalg.solve(G_ij_reg, tf.transpose(grad))
+        
+        ## make the norm of wfs more stable:<\psi+\delta \psi | \psi+\delta \psi>=<\psi | \psi>
+        # See meeting notes for detail
+        '''Ai = tf.math.real(derlog_mean)
+        Ai = Ai / tf.norm(Ai) # unit vector
+        Ai = tf.transpose(tf.cast(Ai, tf.complex64))
+        final_grads = final_grads - tf.reduce_sum(Ai*final_grads) * Ai'''
+
+        ## Save norm of preconditioned gradient
+        grad_norm.append(np.real(tf.norm(final_grads[:num_param_amp,:]).numpy()))
+        grad_norm.append(np.real(tf.norm(final_grads[num_param_amp:,:]).numpy()))
+
+        ## inner product <grad|final_grads>
+        inner_product = tf.einsum('i,i',tf.squeeze(grad),tf.squeeze(final_grads))
 
         grads = []
         prev = 0
@@ -58,4 +78,4 @@ def get_gradient_amp_penalty(derlogs, sample_size, eloc):
             prev += tf.reduce_prod(old_shape[1:])
             grads.append(tf.reshape(final_grad, old_shape[1:]))
 
-        return grads
+        return grads, grad_norm, tf.math.real(inner_product)

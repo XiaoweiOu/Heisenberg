@@ -1,5 +1,6 @@
 import tensorflow as tf
-def get_gradient_sr(derlogs, sample_size, eloc):
+import numpy as np
+def get_gradient_sr(derlogs, sample_size, eloc, num_param_amp):
         """
             Calculate the gradient of E[\Psi] using the stochastic reconfiguration
             S_kk = <O^*_k O_k> - <O^*_k><O_k>
@@ -37,14 +38,34 @@ def get_gradient_sr(derlogs, sample_size, eloc):
         ## Calculate <D_{W}>
         derlog_mean = tf.reduce_mean(all_derlogs, axis=0, keepdims=True)
 
-        #### Calculate <E_loc D^*_{W}>
+        ## Calculate <E_loc D^*_{W}>
         ed = tf.reduce_mean(tf.math.conj(all_derlogs) * eloc, axis = 0, keepdims = True)
 
-        #### Calculate gradient $2Re[  <E_{loc}D^*_{W}> - <E_{loc}><D^*_{W}> ]$
+        ## Calculate gradient $2Re[  <E_{loc}D^*_{W}> - <E_{loc}><D^*_{W}> ]$
         grad = 2 * tf.cast(tf.math.real(ed - eloc_mean * tf.math.conj(derlog_mean)), tf.complex64)
 
-        ### inv(S_kk) * grad == final_grads or S_kk * final_grads == grad
+        ## Save norm of raw gradient
+        grad_norm = []
+        grad_norm.append(np.real(tf.norm(grad[:,:num_param_amp]).numpy()))
+        grad_norm.append(np.real(tf.norm(grad[:,num_param_amp:]).numpy()))
+
+        ##### 3. Calculated modified gradient
+        ## inv(S_kk) * grad == final_grads or S_kk * final_grads == grad
         final_grads = tf.linalg.solve(S_kk_reg, tf.transpose(grad))
+
+        ## make the norm of wfs more stable:<\psi+\delta \psi | \psi+\delta \psi>=<\psi | \psi> 
+        # See meeting notes for detail
+        '''Ai = tf.math.real(derlog_mean)
+        Ai = Ai / tf.norm(Ai) # unit vector
+        Ai = tf.transpose(tf.cast(Ai, tf.complex64))
+        final_grads = final_grads - tf.reduce_sum(Ai*final_grads) * Ai'''
+
+        ## Save norm of preconditioned gradient
+        grad_norm.append(np.real(tf.norm(final_grads[:num_param_amp,:]).numpy()))
+        grad_norm.append(np.real(tf.norm(final_grads[num_param_amp:,:]).numpy()))
+
+        ## inner product <grad|final_grads>
+        inner_product = tf.einsum('i,i',tf.squeeze(grad),tf.squeeze(final_grads))
 
         grads = []
         prev = 0
@@ -53,7 +74,7 @@ def get_gradient_sr(derlogs, sample_size, eloc):
             prev += tf.reduce_prod(old_shape[1:])
             grads.append(tf.reshape(final_grad, old_shape[1:]))
 
-        return grads
+        return grads,grad_norm,tf.math.real(inner_product)
 
 def _test_get_gradient_sr_distinct_config(derlogs, sample_size, eloc, prob, wfs):
         """
@@ -108,7 +129,6 @@ def _test_get_gradient_sr_distinct_config(derlogs, sample_size, eloc, prob, wfs)
         Ai = tf.expand_dims(Ai,axis=-1)
         Ai = tf.cast(Ai, tf.complex64)
         final_grads = final_grads - tf.reduce_sum(Ai*final_grads) * Ai
-        print(', grad norm: ',tf.norm(final_grads).numpy())
 
         grads = []
         prev = 0

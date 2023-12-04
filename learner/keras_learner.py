@@ -6,11 +6,11 @@ import os
 import gc
 from gradient import get_gradient,get_gradient_sr,get_gradient_amp_penalty
 
-class KerasLearner(object):
-    def __init__(self, hamiltonian, model, sampler, optimizer, num_epochs=1000,
-                 minibatch_size=0, window_period=50, reference_energy=None, stopping_threshold=0.05,
-                 store_model_freq=1, observables=[], observable_freq = 0, use_gradient='sr',
-                 initial_sample_path=None, is_save = True, run_name = ''):
+class KerasLearner:
+    def __init__(self, hamiltonian, model, sampler, optimizer,
+                 num_epochs=1000, minibatch_size=0, window_period=50, reference_energy=None,
+                 stopping_threshold=0.05, store_model_freq=1, observables=[], observable_freq = 0,
+                 use_gradient='sr', initial_sample_path=None, is_save = True, run_name = '', use_adaptive_step_size = False):
         """
         Construct a learner objects
         Args:
@@ -44,6 +44,7 @@ class KerasLearner(object):
         self.initial_sample_path = initial_sample_path
         self.is_save = is_save
         self.run_name = run_name
+        self.use_adaptive_step_size = use_adaptive_step_size
 
         self.ground_energy = []
         self.ground_energy_std = []
@@ -74,7 +75,7 @@ class KerasLearner(object):
         else:
             self.samples = tf.convert_to_tensor(self.load_initial_sample(self.initial_sample_path),dtype=np.float32)
 
-        print ('===== Training '+ self.run_name + ' start')
+        print('===== Training '+ self.run_name + ' start')
         print('===== Reference energy:',self.reference_energy)
         for epoch in range(self.num_epochs):
             start = time.time()
@@ -90,44 +91,67 @@ class KerasLearner(object):
             # energy_imag, energy, energy_std, rel_error = self.post_selection(epoch, energy_imag, energy, energy_std, rel_error)
 
             ## Confirm the current sample and append
-            self.append_energy_and_error(energy,energy_std,rel_error)
+            # self.append_energy_and_error(energy,energy_std,rel_error)
 
             ## Print status
             print('### Epoch: %d, energy: %.4f, std: %.4f, std / mean: %.4f, relerror: %.5f' % (
                 epoch, energy, energy_std, energy_std / np.abs(energy), rel_error), end='')
 
-            ## save energy and samples
-            if self.is_save is True:
-                self.save_energy(epoch,energy,energy_std)
-                self.save_samples(self.samples.numpy().tolist())
-
-            ## save model
-            if epoch % self.store_model_freq == 0 and self.is_save is True:
-                self.model.net.save('./result/'+self.run_name)
+            ## Check nan
+            if np.isnan(energy):
+                print('### ERROR ### energy is NAN now!',flush=True)
+                exit(0)
 
             ##### 2. Calculate gradient
             derlogs = self.model.derlog(self.samples)
+
             if self.use_gradient == 'plain':
-                grads = get_gradient(derlogs, self.minibatch_size, elocs)
+                grads = get_gradient(derlogs, self.samples.shape[0], elocs)
             elif self.use_gradient == 'sr':
-                grads = get_gradient_sr(derlogs, self.minibatch_size, elocs)
+                grads, grad_norm, inner_product = get_gradient_sr(derlogs, self.samples.shape[0], elocs, self.model.num_param_amp)
             elif self.use_gradient == 'amp_penalty':
-                grads = get_gradient_amp_penalty(derlogs, self.minibatch_size, elocs)
+                grads, grad_norm, inner_product = get_gradient_amp_penalty(derlogs, self.samples.shape[0], elocs, self.model.num_param_amp)
             else:
                 print("### ERROR ### gradient type incorrect!")
                 exit(0)
 
-            ##### 3. Apply gradients
+            ##### 3. Save energy, current MC samples, and neural network
+            ## save energy and samples
+            if self.is_save:
+                self.save_energy(epoch,energy,energy_std,grad_norm,self.optimizer.lr.numpy())
+                self.save_samples(self.samples.numpy().tolist())
+
+            ## save model
+            if epoch % self.store_model_freq == 0 and self.is_save:
+                self.model.net.save('./result/'+self.run_name)
+
+            ##### 4. Apply gradients
+            ## apply gradients
             self.optimizer.apply_gradients(zip([tf.cast(grad, tf.float32) for grad in grads], self.model.net.trainable_weights))
 
-            ##### 4. Get new sample
-            self.samples = self.sampler.sample(self.model, self.samples, self.minibatch_size, num_steps=self.model.num_points*10)
-            
+            ## adaptive step size
+            if self.use_adaptive_step_size:
+                old_lr = self.optimizer.lr
+                new_lr = self.adaptive_step_size(old_lr,grads,inner_product)
+                self.optimizer.lr.assign(new_lr)
+
+            ##### 5. Get new sample
+            # If only use SR to train log-amp and phi together, you need to increase the equilibration steps
+            equilibration_step = self.model.num_points*10
+            if self.use_gradient == 'sr' and energy<-5:
+                equilibration_step = self.model.num_points*50
+            if self.use_gradient == 'sr' and energy<-10:
+                equilibration_step = self.model.num_points*80
+            if self.use_gradient == 'sr' and energy<-15:
+                equilibration_step = self.model.num_points*100
+
+            self.samples = self.sampler.sample(self.model, self.samples, self.minibatch_size, num_steps=equilibration_step)
+
             #####################################
             #####################################
             #####################################
 
-            ### Calculating additional stuffs
+            ## Calculating additional stuffs
             end = time.time()
             time_interval = end - start
             self.times.append(time_interval)
@@ -135,8 +159,48 @@ class KerasLearner(object):
 
         print ('===== Training finish')
         ## save the last data
-        if self.is_save is True:
+        if self.is_save:
             self.model.net.save('./result/'+self.run_name)
+
+    def adaptive_step_size(self,old_lr,search_direction,old_inner_product):
+        ##### Calculate original energy gradient with updated network parameters
+        sample_size = self.samples.shape[0]
+        
+        ## Calculate new local energy array and gradient with old samples
+        eloc = self.get_local_energy(self.samples,self.model,self.onebyone)
+        derlogs = self.model.derlog(self.samples)
+
+        ## Calculate O_k
+        all_derlogs = tf.concat([tf.reshape(derlog, (sample_size, -1)) for derlog in derlogs], 1)
+
+        ## Calculate <E_{loc}>
+        eloc_mean = tf.reduce_mean(eloc, axis=0, keepdims=True)
+
+        ## Calculate <D_{W}>
+        derlog_mean = tf.reduce_mean(all_derlogs, axis=0, keepdims=True)
+
+        ## Calculate <E_loc D^*_{W}>
+        ed = tf.reduce_mean(tf.math.conj(all_derlogs) * eloc, axis = 0, keepdims = True)
+
+        ## Calculate gradient $2Re[  <E_{loc}D^*_{W}> - <E_{loc}><D^*_{W}> ]$
+        gradE = 2 * tf.cast(tf.math.real(ed - eloc_mean * tf.math.conj(derlog_mean)), tf.complex64)
+
+        ## Flatten search_direction
+        search_direction_fl = tf.concat([tf.reshape(search_direction_ele,[-1]) for search_direction_ele in search_direction],0)
+        new_inner_product = tf.math.real(tf.einsum('i,i',tf.squeeze(gradE),search_direction_fl))
+
+        ##### New learning rate selection
+        modified_coeff = 5/4
+        max_lr = 0.2
+        test_lr = old_lr * old_inner_product / (old_inner_product - new_inner_product)
+
+        ## Switch test_lr
+        if 0 < test_lr <= old_lr:
+            new_lr = test_lr
+        else:
+            new_lr = min(max_lr, modified_coeff * old_lr)
+
+        return new_lr
 
     def get_local_energy(self, samples, model, onebyone):
         """
@@ -185,7 +249,7 @@ class KerasLearner(object):
 
         return energy_imag, energy, energy_std, rel_error
 
-    def save_energy(self, epoch, energy, energy_std):
+    def save_energy(self, epoch, energy, energy_std, grad_norm, learning_rate):
         """
         Save all energy values and the standard deviation of the current local energy array.
         """
@@ -193,13 +257,13 @@ class KerasLearner(object):
         if os.path.isfile(result_file) == False or (self.initial_sample_path == None and epoch == 0):
             csvfile = open(result_file,'w')
             csvwriter = csv.writer(csvfile)
-            csvwriter.writerow(['epoch','energy','energy_std'])
-            csvwriter.writerow([epoch,energy,energy_std])
+            csvwriter.writerow(['epoch','energy','energy_std','grad_amp_before','grad_phi_before','grad_amp_after','grad_phi_after','learning_rate'])
+            csvwriter.writerow([epoch,energy,energy_std]+grad_norm+[learning_rate])
             csvfile.close()
         else:
             with open(result_file,'a') as csvfile:
                 csvwriter = csv.writer(csvfile)
-                csvwriter.writerow([epoch,energy,energy_std])
+                csvwriter.writerow([epoch,energy,energy_std]+grad_norm+[learning_rate])
 
     '''def save_samples(self, samples):
         """

@@ -1,10 +1,11 @@
 import tensorflow as tf
 
+sys.path.append('.')
 from .make_gconv_indices import make_c4_z2_indices, make_c4_p4_indices,\
     make_d4_z2_indices, make_d4_p4m_indices, flatten_indices
 from .transform_filter import transform_filter_2d_nchw, transform_filter
 
-def gconv2d(inputs, filters, strides, padding, gconv_indices, gconv_shape_info,
+def gconv2d(inputs, filters, strides, padding, activation, gconv_indices, gconv_shape_info,
             data_format='NHWC', name=None):
     """
     Tensorflow implementation of the group convolution.
@@ -36,6 +37,10 @@ def gconv2d(inputs, filters, strides, padding, gconv_indices, gconv_shape_info,
 
     # Convolve inputs with transformed filters
     conv = tf.nn.conv2d(input=inputs, filters=transformed_filters, strides=strides, padding=padding, name=name)
+
+    # Apply activation function
+    if activation:
+        conv_output = activation(conv_output)
 
     return conv
 

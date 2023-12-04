@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=sbatch_heisenberg
+#SBATCH --job-name=heisenberg
 #SBATCH --output=sbatch_heisenberg_out.txt
 #SBATCH --ntasks=1
 #SBATCH --nodes=1

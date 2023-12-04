@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=sbatch_heisenberg_j205
+#SBATCH --job-name=heisenberg_j205
 #SBATCH --output=sbatch_heisenberg_j205_out.txt
 #SBATCH --ntasks=1
 #SBATCH --nodes=1

@@ -1,7 +1,7 @@
 import numpy as np
 from collections import Counter
 
-sample_file = 'result/AmpCNNPhiPhasorHubbard_hubbard2_samples.npy'
+sample_file = 'result/AmpDensePhiDenseHubbard_hubbard2_samples.npy'
 samples = np.load(sample_file)
 print('INFO: total number of configurations',len(samples))
 

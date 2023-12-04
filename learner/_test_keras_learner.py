@@ -42,7 +42,14 @@ class TestKerasLearner(object):
                  store_model_freq=1, observables=[], observable_freq = 0, use_gradient='sr',
                  initial_sample_path=None, is_save = True, run_name = ''):
         """
-        Construct a learner objects
+        Construct a learner objects.
+        This is for Hubbard model test.
+
+        Current differences:
+        1. Use wfs instead of log_wfs as the network output.
+        2. Fix 36 configuration and exclude sampling,
+           and use |wfs|^2 as weights for each config rather than counts.
+
         Args:
             hamiltonian: Hamiltonian of the model
             model: the machine learning model used
@@ -95,8 +102,17 @@ class TestKerasLearner(object):
         ## Reset array
         self.reset_memory_array()
         
-        ## fixed 36 samples
-        self.samples = tf.convert_to_tensor(generate_all_bases())
+        # ## fixed 36 samples
+        # self.samples = tf.convert_to_tensor(generate_all_bases())
+
+        ## Get initial sample
+        if self.initial_sample_path is None:
+            self.samples = tf.convert_to_tensor(self.sampler.get_initial_random_samples(self.model.num_points),dtype=np.float32)
+            ## Move initial sample for thousand of times to get to the equilibrium (default = self.model.num_points*10)
+            print('===== Equilibrate initial sample start')
+            self.samples = self.sampler.sample(self.model, self.samples, self.minibatch_size, num_steps=self.model.num_points*10)
+        else:
+            self.samples = tf.convert_to_tensor(self.load_initial_sample(self.initial_sample_path),dtype=np.float32)
 
         print ('===== Training '+ self.run_name + ' start')
         print('===== Reference energy:',self.reference_energy)
@@ -107,45 +123,57 @@ class TestKerasLearner(object):
             #####################################
 
             ##### 0. Calculate new wave functions and probability distribution
-            wfs = self.model.log_val(self.samples).numpy()
+            all_bases = generate_all_bases()
+            log_psi = self.model.log_val(tf.convert_to_tensor(all_bases)).numpy()
+            for i in range(len(all_bases)):
+                print(all_bases[i],log_psi[i],flush=True)
             
-            ## Exclude small wfs
-            new_wfs = []
-            new_samples = []
-            for i,sample in enumerate(self.samples):
-                if np.abs(wfs[i])>1e-15:
-                    new_wfs.append(wfs[i])
-                    new_samples.append(sample)
+            # ## Exclude small wfs
+            # new_wfs = []
+            # new_samples = []
+            # for i,sample in enumerate(self.samples):
+            #     if np.abs(wfs[i])>1e-15:
+            #         new_wfs.append(wfs[i])
+            #         new_samples.append(sample)
 
-            wfs = np.array(new_wfs)
-            self.samples = tf.convert_to_tensor(new_samples)
+            # wfs = np.array(new_wfs)
+            # self.samples = tf.convert_to_tensor(new_samples)
 
             ## Calculate probability distribution
-            prob = (np.conj(wfs) * wfs)/np.sum(np.conj(wfs) * wfs)
+            # prob = (np.conj(wfs) * wfs)/np.sum(np.conj(wfs) * wfs)
 
             ##### 1. Calculate local energy 
-            elocs = self._test_get_local_energy(self.samples,self.model,self.onebyone,prob)
-            energy, energy_std = self._test_process_energy_and_error_distinct_config(elocs,prob)
+            elocs = self.get_local_energy(self.samples,self.model,self.onebyone)
+            energy_imag, energy, energy_std, rel_error = self.process_energy_and_error(elocs)
 
             ## Print status
             print('### Epoch: %d, energy: %.4f, energy_std: %.4f' % (epoch, energy, energy_std), end='')
 
+            ## Check nan
+            if np.isnan(energy):
+                print('### ERROR ### energy is NAN now!',flush=True)
+                exit(0)
+
             ## save energy and samples
-            if self.is_save is True:
+            if self.is_save:
                 self.save_energy(epoch,energy,energy_std)
                 self.save_samples(self.samples.numpy().tolist())
 
             ## save model
-            if epoch % self.store_model_freq == 0 and self.is_save is True:
+            if epoch % self.store_model_freq == 0 and self.is_save:
                 self.model.net.save('./result/'+self.run_name)
 
             ##### 2. Calculate gradient
             derlogs = self.model.derlog(self.samples)
 
             if self.use_gradient == 'plain':
-                grads = _test_get_gradient_distinct_config(derlogs, self.samples.shape[0], elocs, prob)
+                # grads = _test_get_gradient_distinct_config(derlogs, self.samples.shape[0], elocs, prob)
+                grads = get_gradient(derlogs, self.samples.shape[0], elocs)
             elif self.use_gradient == 'sr':
-                grads = _test_get_gradient_sr_distinct_config(derlogs, self.samples.shape[0], elocs, prob, wfs)
+                # grads = _test_get_gradient_sr_distinct_config(derlogs, self.samples.shape[0], elocs, prob, wfs)
+                grads, grad_norm, inner_product = get_gradient_sr(derlogs, self.samples.shape[0], elocs, self.model.num_param_amp)
+            elif self.use_gradient == 'amp_penalty':
+                grads, grad_norm, inner_product = get_gradient_amp_penalty(derlogs, self.samples.shape[0], elocs, self.model.num_param_amp)
             else:
                 print("### ERROR ### gradient type incorrect!")
                 exit(0)
@@ -153,8 +181,11 @@ class TestKerasLearner(object):
             ##### 3. Apply gradients
             self.optimizer.apply_gradients(zip([tf.cast(grad, tf.float32) for grad in grads], self.model.net.trainable_weights))
             
-            ##### 4. Recover the old basis
-            self.samples = tf.convert_to_tensor(generate_all_bases())
+            # ##### 4. Recover the old basis
+            # self.samples = tf.convert_to_tensor(generate_all_bases())
+
+            ##### 4. Get new sample
+            self.samples = self.sampler.sample(self.model, self.samples, self.minibatch_size, num_steps=self.model.num_points*30)
 
             #####################################
             #####################################
@@ -164,13 +195,14 @@ class TestKerasLearner(object):
             end = time.time()
             time_interval = end - start
             self.times.append(time_interval)
+            print(', time: %.5f' % time_interval)
 
         print ('===== Training finish')
         ## save the last data
-        if self.is_save is True:
+        if self.is_save:
             self.model.net.save('./result/'+self.run_name)
 
-    def _test_get_local_energy(self, samples, model, onebyone, prob):
+    def get_local_energy(self, samples, model, onebyone):
         """
             Calculate local energy from a given samples
             $E_{loc}(x) = \sum_{x'} H_{x,x'} \Psi(x') / \Psi(x)$
@@ -183,11 +215,8 @@ class TestKerasLearner(object):
         """
         if onebyone == True:
             eloc_array = []
-            for i,state in enumerate(samples):
-                if prob[i] < 1e-15:
-                    eloc = [0.j]
-                else:
-                    eloc = self.hamiltonian.local_energy(state,model)
+            for state in samples:
+                eloc = self.hamiltonian.local_energy(state,model)
                 eloc_array.append(eloc)
             eloc_array = np.array(eloc_array)
 
@@ -210,7 +239,7 @@ class TestKerasLearner(object):
         ## |Im[E(epoch)]|< alpha2 * energy_std[epoch]
         ## energy_std[epoch] < alpha3 * energy_std[epoch-1]
         """
-        alpha1, alpha2, alpha3 = 8,5,6
+        alpha1, alpha2, alpha3 = 3,5,6
         while epoch >= 1 and (np.abs(energy - self.ground_energy[-1]) > alpha1 or \
         np.abs(energy_imag) > alpha2 * energy_std or \
         energy_std > alpha3 * self.ground_energy_std[-1]):

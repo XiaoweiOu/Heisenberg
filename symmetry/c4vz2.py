@@ -1,7 +1,7 @@
 import tensorflow as tf
 from symmetry import Symmetry
 
-class C4v(Symmetry):
+class C4vZ2(Symmetry):
     def __init__(self,length):
         self.order = 8
         self.length = length
@@ -27,6 +27,9 @@ class C4v(Symmetry):
         x_transform = tf.concat([x_transform,tf.image.rot90(tf.image.flip_left_right(x_reshape))],0)
         x_transform = tf.concat([x_transform,tf.image.rot90(tf.image.flip_up_down(x_reshape))],0)
         
+        ## Z2 spin flip
+        x_transform = tf.concat([x_transform,(-1)*x_transform],0)
+
         x_transform = tf.squeeze(x_transform, -1)
         x_transform = tf.reshape(x_transform, [-1, self.length*self.length])
         return x_transform

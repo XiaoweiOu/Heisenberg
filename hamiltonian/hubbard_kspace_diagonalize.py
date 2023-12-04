@@ -166,6 +166,22 @@ def generate_all_bases():
             all_states.append(np_state.T.tolist())
     return all_states
 
+def generate_important_bases_only():
+    """
+    Only generate important bases from the exact diagonalization result
+    """
+    all_states = [[[0, 0], [1, 1], [0, 0], [1, 1]],
+    [[1, 1], [1, 1], [0, 0], [0, 0]],
+    [[1, 0], [0, 1], [0, 1], [1, 0]],
+    [[0, 1], [1, 0], [1, 0], [0, 1]],
+    [[0, 0], [0, 0], [1, 1], [1, 1]],
+    [[1, 1], [0, 0], [1, 1], [0, 0]],
+    [[1, 0], [0, 1], [1, 0], [0, 1]],
+    [[1, 0], [1, 0], [0, 1], [0, 1]],
+    [[0, 1], [0, 1], [1, 0], [1, 0]],
+    [[0, 1], [1, 0], [0, 1], [1, 0]]]
+    return all_states
+
 def generate_all_bases_one_electron():
     all_states = [[[1, 0], [0, 0], [0, 0], [0, 0]],
     [[0, 1], [0, 0], [0, 0], [0, 0]],
@@ -181,7 +197,8 @@ def generate_all_bases_one_electron():
 
 ## 1. Construct the Hamiltonian matrix
 all_states = generate_all_bases()
-#all_states = generate_all_bases_one_electron()
+# all_states = generate_all_bases_one_electron()
+# all_states = generate_important_bases_only()
 
 ## 2. Setting parameters
 t_coeff, U_coeff = 1,8
@@ -194,6 +211,11 @@ for i,state in enumerate(all_states):
     ## 4. Calculate the off-diagonal term
     out_states, out_hamils = calculate_coulomb_term(state,U_coeff)
     for (out_state,out_hamil) in zip(out_states,out_hamils):
+
+        # Diagonalize in a sub-space
+        # if not out_state in all_states:
+        #     continue
+
         j = all_states.index(out_state)
         hamiltonian[i][j]+=out_hamil
 

@@ -3,4 +3,8 @@ from .amp_cnn_phi_msr import AmpCNNPhiMSR
 from .amp_cnn_phi_phasor import AmpCNNPhiPhasor
 from .amp_cnn_phi_linear import AmpCNNPhiLinear
 from .amp_cnn_phi_multilinear import AmpCNNPhiMultiLinear
-from .amp_cnn_phi_phasor_hubbard import AmpCNNPhiPhasorHubbard
+from .amp_cnn_phi_multilinear_test import AmpCNNPhiMultiLinearTest
+from .amp_cnn_phi_multilinear_triangle import AmpCNNPhiMultiLinearTriangle
+from .amp_gcnn_phi_multilinear import AmpGCNNPhiMultiLinear
+from .amp_cnn_phi_sitebond import AmpCNNPhiSiteBond
+from .amp_dense_phi_dense_hubbard import AmpDensePhiDenseHubbard

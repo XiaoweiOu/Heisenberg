@@ -5,14 +5,20 @@ import numpy as np
 import scipy
 import scipy.sparse.linalg
 
-class HeisenbergJ1J2(Hamiltonian): 
+class HeisenbergJ1J2Transform(Hamiltonian): 
     """
-    This class is used to define Heisenberg J1-J2 model.
+    This class is used to define the gauge transformed Heisenberg J1-J2 model.
     Nearest neighbor interaction along x-, y- and z-axis with magnitude J_1,
     next nearest neighbor interaction along x-, y- and z-axis with magntitude J_2.
+
+    In this case, the Marshall sign rule is built in.
+    Away from the points J1=0 and J2=0 the sign rule does no longer hold exactly but presents a good approximation,
+    which we use as a starting point from which we aim to learn the correct deviations.
+
+    Recovering the physics of the original Hamiltonian from H' is achieved by flipping all x and y correlators with support on both sublattices.
     
-    $H = J_1 \sum_{<i,j>} (S^z_i S^z_j + S^y_i S^y_j + S^x_i S^x_j) + J_2 \sum_{<<i,j>>} (S^z_i S^z_j + S^y_i S^y_j + S^x_i S^x_j)
-    = J_1 \sum_{<i,j>} (S^z_i S^z_j + 1/2 * (S^+_i S^-_j + S^-_i S^+_j)) + J_2 \sum_{<<i,j>>} (S^z_i S^z_j + 1/2 * (S^+_i S^-_j + S^-_i S^+_j))$
+    $H' = J_1 \sum_{<i,j>} (S^z_i S^z_j - S^y_i S^y_j - S^x_i S^x_j) + J_2 \sum_{<<i,j>>} (S^z_i S^z_j + S^y_i S^y_j + S^x_i S^x_j)
+    = J_1 \sum_{<i,j>} (S^z_i S^z_j - 1/2 * (S^+_i S^-_j + S^-_i S^+_j)) + J_2 \sum_{<<i,j>>} (S^z_i S^z_j + 1/2 * (S^+_i S^-_j + S^-_i S^+_j))$
     """
     def __init__(self, graph, j1=1.0, j2=0.0, total_sz = None):
         """
@@ -42,7 +48,7 @@ class HeisenbergJ1J2(Hamiltonian):
             The Hamiltonian where the first column contains the diagonal, which is  $J_1 \sum_{<i,j>} z_i z_j / 4 + J_2 \sum_{<<i,j>>} z_i z_j / 4$.
             Because only S^z_i*S^z_j contribute to the diagonal term.
             
-            The rest of the column contains the off-diagonal, which is $J_1 * (1 - z_i * z_j) / 4 + J_2 * (1 - z_i * z_j) / 4$.
+            The rest of the column contains the off-diagonal, which is $(-1) * J_1 * (1 - z_i * z_j) / 4 + J_2 * (1 - z_i * z_j) / 4$.
             Considering the raising and lowering operators, it gives a 1/2 if z_i * z_j == -1, and 0 otherwise.
 
             Therefore, #columns = 1+ #nearest bond+ #next-nearest bond = 1+4*num_particles
@@ -57,12 +63,12 @@ class HeisenbergJ1J2(Hamiltonian):
             diagonal += self.j1 * samples[:,s] * samples[:,s_2] / 4
 
             # Off diagonal element of the hamiltonian
-            # $J_1 * (1 - z_i * z_j) / 4$
+            # $(-1) * J_1 * (1 - z_i * z_j) / 4$
             if off_diagonal is None:
-                off_diagonal = self.j1 * (1 - samples[:,s] * samples[:, s_2]) / 4
+                off_diagonal = (-1) * self.j1 * (1 - samples[:,s] * samples[:, s_2]) / 4
                 off_diagonal = tf.reshape(off_diagonal, (num_samples, 1))
             else:
-                temp = self.j1 * (1 - samples[:,s] * samples[:, s_2]) / 4
+                temp = (-1) * self.j1 * (1 - samples[:,s] * samples[:, s_2]) / 4
                 temp = tf.reshape(temp, (num_samples, 1))
                 off_diagonal = tf.concat((off_diagonal, temp), axis=1)
         

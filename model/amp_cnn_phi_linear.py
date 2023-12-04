@@ -1,7 +1,6 @@
 import numpy as np
 import tensorflow as tf
 import os
-import psutil
 from tensorflow import keras
 from tensorflow.keras import layers
 from model import Model
@@ -14,14 +13,14 @@ class AmpCNNPhiLinear(Model):
     def __str__(self):
         return "Amplitude network: CNN Phase: linear layer"
 
-    def create_model(self):
+    def create_model(self,length,dimension):
         """
         Create a cnn for the wave funtion.
         Return: log(psi)=lnA+i*phi
         """
         ## reshape input to be 2D data
-        inputs = tf.keras.Input(shape=(self.length ** self.dimension,),dtype=tf.float64)
-        inputs_re = layers.Reshape((self.length,self.length),input_shape=(self.length ** self.dimension,))(inputs)
+        inputs = tf.keras.Input(shape=(length ** dimension,),dtype=tf.float64)
+        inputs_re = layers.Reshape((length,length),input_shape=(length ** dimension,))(inputs)
 
         ## expand a dimension for feature at the end
         inputs_re = tf.expand_dims(inputs_re,-1)
@@ -49,6 +48,7 @@ class AmpCNNPhiLinear(Model):
         
         inputs_pbc = self.PBCs(inputs_re,padding=4)#kernel_size=5
         conv_A = layers.Conv2D(filters=16, kernel_size=5, padding='VALID', name='conv_amp', kernel_initializer=tf.keras.initializers.GlorotNormal(), activation='relu')(inputs_pbc)
+        self.num_param_amp = (5*5+1)*16
         conv_A = tf.math.abs(conv_A)
         pool_A,A_indices = tf.math.top_k(conv_A, k=1)
         lnA = tf.math.reduce_sum(pool_A,axis=[-1,-2,-3])
@@ -56,7 +56,7 @@ class AmpCNNPhiLinear(Model):
         ## phase
         # a simple linear function
         def msr_init(shape, dtype = None):
-            indices = tf.constant([[i*self.length+j] for i in range(self.length) for j in range(self.length) if (i%2==0 and j%2==0) or (i%2==1 and j%2==1)])
+            indices = tf.constant([[i*length+j] for i in range(length) for j in range(length) if (i%2==0 and j%2==0) or (i%2==1 and j%2==1)])
             updates = tf.constant([np.pi]*(shape[0]//2))
             updates = tf.expand_dims(updates,axis=-1)
             msr_weights = tf.scatter_nd(indices, updates, shape)

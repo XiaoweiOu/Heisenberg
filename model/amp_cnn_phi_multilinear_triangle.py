@@ -4,7 +4,7 @@ from tensorflow import keras
 from tensorflow.keras import layers
 from model import Model
 
-class AmpCNNPhiMultiLinear(Model):
+class AmpCNNPhiMultiLinearTriangle(Model):
     """
     Amplitude network: one CNN layer(16;5*5;GlorotNormal)
     Phase network: two dense layers(RandomNormal initializer)
@@ -25,45 +25,25 @@ class AmpCNNPhiMultiLinear(Model):
         inputs_re = tf.expand_dims(inputs_re,-1)
         
         ## amplitude
-        def inception(inputs,name,num_channels=2048):
-            """
-            Inception layer: consist of a 3x3 conv layer, a 5x5 conv layer, and a 3x3 maxpooling layer
-            """
-            inputs_3 = self.PBCs(inputs,padding=3)#kernel_size=3
-            inputs_5 = self.PBCs(inputs,padding=5)#kernel_size=5
-        
-            # dropout rate is suggested to between 0.2 and 0.5
-            conv3 = layers.Conv2D(num_channels, kernel_size=4, padding='VALID', name=name+'_incep_3', kernel_initializer=tf.keras.initializers.HeNormal(), activation='relu')(inputs_3)
-            conv3 = layers.Dropout(rate=0.2)(conv3)
-            conv5 = layers.Conv2D(num_channels, kernel_size=6, padding='VALID', name=name+'_incep_5', kernel_initializer=tf.keras.initializers.HeNormal(), activation='relu')(inputs_5)
-            conv5 = layers.Dropout(rate=0.2)(conv5)
-       
-            # concatenate final outputs
-            outputs = layers.Concatenate(axis=3)([conv3, conv5])
-            return outputs
-        
         inputs_pbc = self.PBCs(inputs_re,padding=5)#kernel_size=6
         conv_A = layers.Conv2D(filters=64, kernel_size=6, padding='VALID', name='conv_amp', kernel_initializer=tf.keras.initializers.GlorotNormal(), activation='relu')(inputs_pbc)
         self.num_param_amp = (6*6+1)*64
-        # conv_A = tf.math.abs(conv_A)
         pool_A,A_indices = tf.math.top_k(conv_A, k=1)
         lnA = tf.math.reduce_sum(pool_A,axis=[-1,-2,-3])
 
         ## phase
         # a simple linear function
-        def msr_init(shape, dtype = None):
-            indices = tf.constant([[i*length+j] for i in range(length) for j in range(length) if (i%2==0 and j%2==0) or (i%2==1 and j%2==1)])
-            updates = tf.constant([np.pi]*(shape[0]//2))
-            updates = tf.expand_dims(updates,axis=-1)
-            msr_weights = tf.scatter_nd(indices, updates, shape)
-            return msr_weights
-
         dense1_phi = layers.Dense(units=64, activation='relu', name = 'dense1_phi')(inputs)
         dense2_phi = layers.Dense(units=64, activation='relu', name = 'dense2_phi')(dense1_phi)
         phi = tf.reduce_sum(dense2_phi,axis=-1)
 
+        # triangle wave
+        period = 2*np.pi
+        phi_tri = tf.complex(4*tf.math.abs(phi/period - tf.math.floor(phi/period+0.5))-1, 4*tf.math.abs(phi/period - 0.5 - tf.math.floor(phi/period))-1)
+        phi_tri = tf.math.log(phi_tri)
+
         ## output
         # stack the values for output
-        outputs = tf.complex(lnA,phi)
+        outputs = tf.complex(lnA,0.) + phi_tri
 
         return tf.keras.Model(inputs=inputs, outputs=outputs)
