@@ -4,7 +4,10 @@ import time
 import csv
 import os
 import gc
-from gradient import get_gradient,get_gradient_sr,get_gradient_amp_penalty
+from gradient import get_gradient,get_gradient_sr,get_gradient_minsr,get_gradient_amp_penalty
+
+# Print everything
+# np.set_printoptions(threshold=np.inf)
 
 class KerasLearner:
     def __init__(self, hamiltonian, model, sampler, optimizer,
@@ -67,11 +70,12 @@ class KerasLearner:
         self.reset_memory_array()
         
         ## Get initial sample
+        ## Move initial sample for thousand of times to get to the equilibrium (default = self.model.num_points*10)
+        default_equilibration = self.model.num_points*10
         if self.initial_sample_path is None:
             self.samples = tf.convert_to_tensor(self.sampler.get_initial_random_samples(self.model.num_points),dtype=np.float32)
-            ## Move initial sample for thousand of times to get to the equilibrium (default = self.model.num_points*10)
             print('===== Equilibrate initial sample start')
-            self.samples = self.sampler.sample(self.model, self.samples, self.minibatch_size, num_steps=self.model.num_points*10)
+            self.samples = self.sampler.sample(self.model, self.samples, self.minibatch_size, num_steps=default_equilibration)
         else:
             self.samples = tf.convert_to_tensor(self.load_initial_sample(self.initial_sample_path),dtype=np.float32)
 
@@ -106,11 +110,13 @@ class KerasLearner:
             derlogs = self.model.derlog(self.samples)
 
             if self.use_gradient == 'plain':
-                grads = get_gradient(derlogs, self.samples.shape[0], elocs)
+                grads, grad_norm = get_gradient(derlogs, self.samples.shape[0], elocs)
             elif self.use_gradient == 'sr':
                 grads, grad_norm, inner_product = get_gradient_sr(derlogs, self.samples.shape[0], elocs, self.model.num_param_amp)
             elif self.use_gradient == 'amp_penalty':
                 grads, grad_norm, inner_product = get_gradient_amp_penalty(derlogs, self.samples.shape[0], elocs, self.model.num_param_amp)
+            elif self.use_gradient == 'minsr':
+                grads, grad_norm, inner_product = get_gradient_minsr(derlogs, self.samples.shape[0], elocs, self.model.num_param_amp, mass = 1.)
             else:
                 print("### ERROR ### gradient type incorrect!")
                 exit(0)
@@ -137,13 +143,19 @@ class KerasLearner:
 
             ##### 5. Get new sample
             # If only use SR to train log-amp and phi together, you need to increase the equilibration steps
-            equilibration_step = self.model.num_points*10
+            equilibration_step = default_equilibration
             if self.use_gradient == 'sr' and energy<-5:
                 equilibration_step = self.model.num_points*50
             if self.use_gradient == 'sr' and energy<-10:
                 equilibration_step = self.model.num_points*80
             if self.use_gradient == 'sr' and energy<-15:
                 equilibration_step = self.model.num_points*100
+
+            if self.model.__class__.__name__ == 'AmpCNNPhiMultiLinearTriangle' and energy<-10:
+                equilibration_step = self.model.num_points*50
+
+            ### TEST ### for minSR
+            equilibration_step = self.model.num_points*20
 
             self.samples = self.sampler.sample(self.model, self.samples, self.minibatch_size, num_steps=equilibration_step)
 

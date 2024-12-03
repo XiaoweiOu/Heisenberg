@@ -47,3 +47,34 @@ class AmpCNNPhiMultiLinearTriangle(Model):
         outputs = tf.complex(lnA,0.) + phi_tri
 
         return tf.keras.Model(inputs=inputs, outputs=outputs)
+    
+    def log_val(self, x):
+        """
+            Calculate log(\Psi(x))
+
+            With c4v symmetry: |S|=8
+            log(\Psi(x)) = log(1/|S| \sum_{x' \in S} exp(net(x')))
+
+            Args:
+                x: the configuration needed to be calculated
+        """
+        if self.symmetry is None:
+            log_psi = self.net(x)
+            
+        else:
+            x_symmetrized = self.symmetry.symmetrize_config(x)
+            log_psi_symmetrized = self.net(x_symmetrized)
+
+            num_samples = x.shape[0] # Number of original configurations
+            batch_indices_list = [[i+j*num_samples for j in range(self.symmetry.order)] for i in range(num_samples)]
+            batch_indices_tensor = tf.constant(batch_indices_list, dtype=tf.int32)
+            selected_elements = tf.gather(log_psi_symmetrized, batch_indices_tensor, axis=0)
+
+            ## v2: average the wave function
+            ## For triangle wave, we need to use this average scheme.
+            selected_elements = selected_elements - 15 #tf.cast(tf.math.reduce_mean(tf.math.real(selected_elements)),tf.complex64)
+            selected_elements = tf.math.exp(selected_elements)
+            log_psi = tf.reduce_mean(selected_elements, axis=1)
+            log_psi = tf.math.log(log_psi)
+
+        return tf.expand_dims(log_psi,axis=-1)

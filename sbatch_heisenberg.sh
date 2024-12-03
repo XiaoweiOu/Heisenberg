@@ -7,10 +7,9 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --gpus=1
 #SBATCH --partition=gpu
-#SBATCH --time=2-
-#SBATCH --mem-per-cpu=20G
+#SBATCH --time=3:00:00
+#SBATCH --mem-per-cpu=16G
 
-module load miniconda CUDAcore/11.2.2 cuDNN/8.1.1.33-CUDA-11.2.2
-conda deactivate
+module load miniconda CUDA/11.3.1 cuDNN/8.2.1.32-CUDA-11.3.1
 conda activate many_body
 python notebooks/heisenberg.py

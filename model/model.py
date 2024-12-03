@@ -16,7 +16,6 @@ class Model:
         loadpath: path to load model
 
         class variables:
-        batch_size
         num_points: shape of input data, or say number of particles
         net: keras model object
         """
@@ -147,7 +146,7 @@ class Model:
 
     #     return [tf.complex(real_jacobians[i], imag_jacobians[i]) for i in range(len(real_jacobians))]
     
-    def derlog(self, x, batch_size=100):
+    def derlog(self, x, batch_size=20):
         """
         Calculate $D_{W}(x) = D_{W} = (1 / \Psi(x)) * (d \Psi(x) / dW) = dlog(Psi(x))/dW$ where W can be the weights or the biases.
         batch_size = 500 (symmetrized version: 100)

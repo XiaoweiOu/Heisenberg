@@ -24,6 +24,21 @@ def get_gradient_sr(derlogs, sample_size, eloc, num_param_amp):
         ## Calculate S_kk = <O^*_k O_k> - <O^*_k><O_k>
         S_kk = all_derlogs_derlogs_mean - tf.math.conj(tf.transpose(all_derlogs_mean)) * all_derlogs_mean
 
+        
+        # # TEST: whether eigenvalues of S and T are identical
+        # eigenvalues = tf.linalg.eigvals(S_kk)
+        # print('### TEST ### S shape', tf.shape(S_kk))
+        # print('### TEST ### S eigenvalues:', eigenvalues[:20])
+        # print('### TEST ### S eigenvalues:', eigenvalues[-20:])
+
+        # O_mat = (all_derlogs - all_derlogs_mean) / tf.math.sqrt(tf.cast(sample_size,tf.complex64))
+        # T_mat = O_mat @ tf.linalg.adjoint(O_mat)
+        # eigenvalues = tf.linalg.eigvals(T_mat)
+        # print('### TEST ### T shape', tf.shape(T_mat))
+        # print('### TEST ### T eigenvalues:', eigenvalues[-20:])
+        # exit(0)
+
+
         ## Regularize S_kk to make sure it is invertible
         regularizer = 0.2
 

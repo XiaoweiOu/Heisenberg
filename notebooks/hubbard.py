@@ -51,11 +51,11 @@ initial_learning_rate = 0.001
 optimizer = tf.keras.optimizers.SGD(learning_rate = initial_learning_rate, momentum = 0.3, nesterov=True)
 
 stopping_threshold = 0.01
-num_epochs = 200
+num_epochs = 2000
 
 ## Training Process
 learner = TestKerasLearner(hamiltonian = hamil, model = mlp, sampler = sampler, optimizer = optimizer,
                   num_epochs = num_epochs, stopping_threshold = stopping_threshold, observables = [],
-                  reference_energy = reference_energy[str(square2d.length)], use_gradient = 'sr',
+                  reference_energy = reference_energy[str(square2d.length)], use_gradient = 'amp_penalty',
                   initial_sample_path = initial_sample_path, is_save = is_save, run_name = run_name)
 learner.learn()
