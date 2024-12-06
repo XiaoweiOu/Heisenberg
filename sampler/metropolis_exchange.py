@@ -139,28 +139,22 @@ class MetropolisExchange(Sampler):
                 new samples with two randomly flipped spins
         """
         num_points = self.graph.num_points
-        position1 = np.random.randint(0, num_points, num_samples)
-        position2 = np.random.randint(0, num_points, num_samples)
+        row_indices = tf.range(num_samples)
+        
+        position1 = tf.random.uniform(shape=(num_samples,), minval=0, maxval=num_points, dtype=tf.int32)
+        position2 = tf.random.uniform(shape=(num_samples,), minval=0, maxval=num_points, dtype=tf.int32)
 
-        # n = self.graph.length
-        # position2 = []
-        # for site1 in position1:
-        #     site2 = np.random.choice([int(site1/n)*n + (site1+1)%n, int(site1/n)*n + (site1-1)%n,
-        #               (int(site1/n)+1)%n * n + site1%n, (int(site1/n)-1)%n * n + site1%n])
-        #     position2.append(site2)
-        # position2 = np.array(position2)
+        indices1 = tf.stack([row_indices, position1], axis=1)
+        indices2 = tf.stack([row_indices, position2], axis=1)
 
-        row_indices = np.reshape(range(num_samples), (num_samples, 1))
-        col_indices1 = np.reshape(position1, (num_samples, 1))
-        col_indices2 = np.reshape(position2, (num_samples, 1))
-        indices1 = tf.convert_to_tensor(value=np.concatenate((row_indices, col_indices1), axis=1))
-        indices2 = tf.convert_to_tensor(value=np.concatenate((row_indices, col_indices2), axis=1))
         elements1 = tf.gather_nd(sample, indices1)
         elements2 = tf.gather_nd(sample, indices2)
-        old1 = tf.scatter_nd(indices1, elements1, (num_samples, num_points))
-        old2 = tf.scatter_nd(indices2, elements2, (num_samples, num_points))
-        new1 = tf.scatter_nd(indices1, elements2, (num_samples, num_points))
-        new2 = tf.scatter_nd(indices2, elements1, (num_samples, num_points))
+
+        base_tensor = tf.zeros_like(sample)
+        old1 = tf.tensor_scatter_nd_update(base_tensor, indices1, elements1)
+        old2 = tf.tensor_scatter_nd_update(base_tensor, indices2, elements2)
+        new1 = tf.tensor_scatter_nd_update(base_tensor, indices1, elements2)
+        new2 = tf.tensor_scatter_nd_update(base_tensor, indices2, elements1)
         return sample - old1 - old2 + new1 + new2
 
     def sample(self, model, initial_sample, num_samples, num_steps):
