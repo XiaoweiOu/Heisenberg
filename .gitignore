@@ -1,5 +1,9 @@
 # result
-./result
+./result/
+./result_paper_v1/
+./result_paper_v2/
+*_out.txt
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
