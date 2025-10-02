@@ -3,11 +3,15 @@ from .amp_cnn_phi_msr import AmpCNNPhiMSR
 from .amp_cnn_phi_phasor import AmpCNNPhiPhasor
 from .amp_cnn_phi_linear import AmpCNNPhiLinear
 from .amp_cnn_phi_linear_larger import AmpCNNPhiLinearLarger
+
 from .amp_cnn_phi_multilinear import AmpCNNPhiMultiLinear
 from .amp_cnn_phi_multilinear_test import AmpCNNPhiMultiLinearTest
+from .amp_cnn_phi_multilinear_test_larger import AmpCNNPhiMultiLinearTestLarger
 from .amp_cnn_complex_phi_multilinear import AmpCNNComplexPhiMultiLinear
 from .amp_cnn_phi_multilinear_triangle import AmpCNNPhiMultiLinearTriangle
+
 #from .amp_gcnn_phi_multilinear import AmpGCNNPhiMultiLinear
 from .amp_cnn_phi_sitebond import AmpCNNPhiSiteBond
 from .amp_dense_phi_dense_hubbard import AmpDensePhiDenseHubbard
 from .amp_unit_phi_multilinear_test import AmpUnitPhiMultiLinearTest
+from .deepcnn import DeepCNN

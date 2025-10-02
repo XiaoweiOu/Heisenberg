@@ -1,0 +1,37 @@
+INFO: total number of configurations 1000
+INFO: number of the distinct configurations 35
+[[1, 1], [1, 1], [0, 0], [0, 0]] count: 184 frequency: 0.184
+[[0, 0], [0, 0], [1, 1], [1, 1]] count: 183 frequency: 0.183
+[[1, 0], [0, 1], [0, 1], [1, 0]] count: 98 frequency: 0.098
+[[0, 1], [1, 0], [1, 0], [0, 1]] count: 97 frequency: 0.097
+[[0, 1], [1, 1], [1, 0], [0, 0]] count: 39 frequency: 0.039
+[[0, 0], [1, 0], [1, 1], [0, 1]] count: 37 frequency: 0.037
+[[1, 1], [0, 1], [0, 0], [1, 0]] count: 29 frequency: 0.029
+[[1, 0], [0, 0], [0, 1], [1, 1]] count: 27 frequency: 0.027
+[[0, 0], [0, 1], [1, 0], [1, 1]] count: 23 frequency: 0.023
+[[0, 1], [1, 0], [1, 1], [0, 0]] count: 22 frequency: 0.022
+[[1, 0], [1, 1], [0, 0], [0, 1]] count: 19 frequency: 0.019
+[[1, 0], [0, 1], [0, 0], [1, 1]] count: 19 frequency: 0.019
+[[1, 1], [1, 0], [0, 1], [0, 0]] count: 19 frequency: 0.019
+[[1, 1], [0, 0], [0, 1], [1, 0]] count: 18 frequency: 0.018
+[[1, 1], [0, 0], [1, 1], [0, 0]] count: 17 frequency: 0.017
+[[0, 1], [0, 0], [1, 1], [1, 0]] count: 17 frequency: 0.017
+[[0, 1], [1, 0], [0, 1], [1, 0]] count: 17 frequency: 0.017
+[[0, 0], [1, 1], [1, 0], [0, 1]] count: 16 frequency: 0.016
+[[1, 0], [0, 1], [1, 0], [0, 1]] count: 13 frequency: 0.013
+[[1, 0], [1, 1], [0, 1], [0, 0]] count: 13 frequency: 0.013
+[[1, 1], [1, 0], [0, 0], [0, 1]] count: 13 frequency: 0.013
+[[0, 0], [1, 1], [0, 0], [1, 1]] count: 12 frequency: 0.012
+[[0, 1], [0, 0], [1, 0], [1, 1]] count: 11 frequency: 0.011
+[[0, 0], [0, 1], [1, 1], [1, 0]] count: 11 frequency: 0.011
+[[1, 0], [1, 0], [0, 1], [0, 1]] count: 10 frequency: 0.01
+[[0, 0], [1, 1], [1, 1], [0, 0]] count: 7 frequency: 0.007
+[[0, 1], [0, 1], [1, 0], [1, 0]] count: 7 frequency: 0.007
+[[1, 1], [0, 0], [0, 0], [1, 1]] count: 6 frequency: 0.006
+[[0, 0], [1, 1], [0, 1], [1, 0]] count: 4 frequency: 0.004
+[[0, 0], [1, 0], [0, 1], [1, 1]] count: 3 frequency: 0.003
+[[0, 1], [1, 0], [0, 0], [1, 1]] count: 3 frequency: 0.003
+[[1, 0], [0, 1], [1, 1], [0, 0]] count: 2 frequency: 0.002
+[[1, 0], [0, 0], [1, 1], [0, 1]] count: 2 frequency: 0.002
+[[1, 1], [0, 1], [1, 0], [0, 0]] count: 1 frequency: 0.001
+[[1, 1], [0, 0], [1, 0], [0, 1]] count: 1 frequency: 0.001

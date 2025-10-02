@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --job-name=hubbard
-#SBATCH --output=sbatch_hubbard_out.txt
+#SBATCH --output=sbatch_hubbard-%j.out
 #SBATCH --ntasks=1
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=1

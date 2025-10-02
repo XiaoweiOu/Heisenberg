@@ -11,7 +11,8 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "justMyCode": true
+            "justMyCode": true,
+            "python": "/gpfs/gibbs/project/ozolins/xo24/conda_envs/many_body/bin/python"
         }
     ]
 }

@@ -1,0 +1,2 @@
+epoch,energy,energy_std,grad_amp_before,grad_phi_before,grad_amp_after,grad_phi_after,learning_rate
+0,17.370548,2.1096249,10.028434,0.78486073,0.48538688,1.63825,0.04

@@ -15,11 +15,15 @@ plt.rc('axes', linewidth = 1.5)
 plt.rc('xtick', labelsize = 15)
 plt.rc('ytick', labelsize = 15)
 
+color0 = 'blueviolet'
+color1 = 'cornflowerblue'
+color2 = 'forestgreen'
+
 number_particle = 6 ** 2
 reference_energy = -24.44 # -24.44 # -18.135
 
-result_file = 'result_paper_v2/AmpCNNPhiMultiLinearTest_SUN6_mass4_symmetrized_mu01_energy.csv'
-label1= r'$\mu = 0.1$'
+result_file = 'result/AmpCNNPhiMultiLinearTest_SUN6_tritildemass11_linearsolve_epsilon_symmetrized_LR0.006_energy.csv'
+label1= r'$\tilde{\epsilon}$ Method (SR)'
 energy1 = []
 with open(result_file,'r') as csvfile:
     csvreader = csv.reader(csvfile)
@@ -32,8 +36,8 @@ energy1_filtered = energy1[:-30]
 for i in range(len(energy1)-30):
     energy1_filtered[i] = np.mean(energy1[i:i+30])
 
-result_file = 'result_paper_v2/AmpCNNPhiMultiLinearTest_SUN6_mass4_symmetrized_mu03_energy.csv'
-label2= r'$\mu = 0.3$'
+result_file = 'result/AmpCNNPhiMultiLinearTest_SUN6_minsrtritildemass11_linearsolve_epsilon_symmetrized_LR0.006_energy.csv'
+label2= r'$\tilde{\epsilon}$ Method (MinSR)'
 energy2 = []
 with open(result_file,'r') as csvfile:
     csvreader = csv.reader(csvfile)
@@ -41,38 +45,16 @@ with open(result_file,'r') as csvfile:
     for row in csvreader:
         energy2.append(float(row[1]))
 
+# energy filter: use a window of size 30
 energy2_filtered = energy2[:-30]
 for i in range(len(energy2)-30):
     energy2_filtered[i] = np.mean(energy2[i:i+30])
 
-result_file = 'result_paper_v2/AmpCNNPhiMultiLinearTest_SUN6_mass4_symmetrized_mu05_energy.csv'
-label3= r'$\mu = 0.5$'
-energy3 = []
-with open(result_file,'r') as csvfile:
-    csvreader = csv.reader(csvfile)
-    fields = next(csvreader)
-    for row in csvreader:
-        energy3.append(float(row[1]))
+print(f'epsilon tilde LR=0.006:\nSR: {(np.mean(energy1_filtered[-10])-reference_energy)/36}\nMinSR: {(np.mean(energy2_filtered[-10])-reference_energy)/36}')
 
-energy3_filtered = energy3[:-30]
-for i in range(len(energy3)-30):
-    energy3_filtered[i] = np.mean(energy3[i:i+30])
-
-result_file = 'result_paper_v2/AmpCNNPhiMultiLinearTest_SUN6_mass4_symmetrized_mu07_energy.csv'
-label4= r'$\mu = 0.7$'
-energy4 = []
-with open(result_file,'r') as csvfile:
-    csvreader = csv.reader(csvfile)
-    fields = next(csvreader)
-    for row in csvreader:
-        energy4.append(float(row[1]))
-
-energy4_filtered = energy4[:-30]
-for i in range(len(energy4)-30):
-    energy4_filtered[i] = np.mean(energy4[i:i+30])
-
-result_file = 'result_paper_v2/AmpCNNPhiMultiLinearTest_SUN6_mass4_symmetrized_nomu_energy.csv'
-label5= 'no momemtum\nmethod'
+#result/AmpCNNPhiMultiLinearTest_SUN6_mass4_symmetrized_adaptivestep_energy.csv
+result_file = 'result/AmpCNNPhiMultiLinearTest_SUN6_mass4_symmetrized_adaptivestep_energy.csv'
+label5= r'$\tilde{O}$ Method (SR)'
 energy5 = []
 with open(result_file,'r') as csvfile:
     csvreader = csv.reader(csvfile)
@@ -84,32 +66,37 @@ energy5_filtered = energy5[:-30]
 for i in range(len(energy5)-30):
     energy5_filtered[i] = np.mean(energy5[i:i+30])
 
+print(f'two Otilde SR: {(np.mean(energy5_filtered[-10])-reference_energy)/36}')
+
+#result/AmpCNNPhiMultiLinearTest_SUN6_minsrmass4_symmetrized_adaptivestep_beta0.05_energy.csv 
+result_file = 'result/AmpCNNPhiMultiLinearTest_SUN6_minsrmass4_symmetrized_adaptivestep_beta0.05_energy.csv'
+label9= r'$\tilde{O}$ Method (MinSR)'
+energy9 = []
+with open(result_file,'r') as csvfile:
+    csvreader = csv.reader(csvfile)
+    fields = next(csvreader)
+    for row in csvreader:
+        energy9.append(float(row[1]))
+
+energy9_filtered = energy9[:-30]
+for i in range(len(energy9)-30):
+    energy9_filtered[i] = np.mean(energy9[i:i+30])
+
 fig, ax = plt.subplots(figsize=[8,6], dpi=120, nrows=1, ncols=1)
-ax.plot((np.array(energy1_filtered[:2000])-reference_energy)/number_particle,label=label1)
-ax.plot((np.array(energy2_filtered[:2000])-reference_energy)/number_particle,label=label2)
-ax.plot((np.array(energy3_filtered[:2000])-reference_energy)/number_particle,label=label3)
-ax.plot((np.array(energy4_filtered[:2000])-reference_energy)/number_particle,label=label4)
-ax.plot((np.array(energy5_filtered[:2000])-reference_energy)/number_particle,label=label5)
+ax.plot((np.array(energy1_filtered[:3000])-reference_energy)/number_particle,label=label1,markersize=2)
+ax.plot((np.array(energy2_filtered[:3000])-reference_energy)/number_particle,label=label2,markersize=2)
+# ax.plot((np.array(energy3_filtered[:])-reference_energy)/number_particle,label=label3,markersize=2)
+# ax.plot((np.array(energy4_filtered[:])-reference_energy)/number_particle,label=label4,markersize=2)
+ax.plot((np.array(energy5_filtered[:3000])-reference_energy)/number_particle,label=label5,markersize=2)
+# ax.plot((np.array(energy6_filtered[:])-reference_energy)/number_particle,label=label6,markersize=2)
+# ax.plot((np.array(energy7_filtered[:])-reference_energy)/number_particle,label=label7,markersize=2)
+# ax.plot((np.array(energy8_filtered[:])-reference_energy)/number_particle,label=label8,markersize=2)
+ax.plot((np.array(energy9_filtered[:3000])-reference_energy)/number_particle,label=label9,markersize=2)
+# ax.plot((np.array(energy10_filtered[:])-reference_energy)/number_particle,label=label10,markersize=2)
+
 ax.set_xlabel('Iteration')
 ax.set_ylabel(r'$\Delta$E/N')
-ax.grid(which='major', axis='both')
+# ax.grid(which='major', axis='both')
 ax.set_yscale('log')
 ax.legend()
-# plt.savefig('./draw/energy_compare_curve.pdf',bbox_inches = 'tight', pad_inches=0.1)
-plt.savefig('./draw/energy_compare_curve.pdf', pad_inches=0.1)
-
-# Scatter plot to compare the final converging values
-final_energy1 = (np.mean(energy1[2000-30:2000])-reference_energy)/number_particle
-final_energy2 = (np.mean(energy2[2000-30:2000])-reference_energy)/number_particle
-final_energy3 = (np.mean(energy3[2000-30:2000])-reference_energy)/number_particle
-final_energy4 = (np.mean(energy4[2000-30:2000])-reference_energy)/number_particle
-final_energy5 = (np.mean(energy5[2000-30:2000])-reference_energy)/number_particle
-
-fig, ax = plt.subplots(figsize=[8,6], dpi=120, nrows=1, ncols=1)
-ax.scatter([1,2,3,4,5],[final_energy1,final_energy2,final_energy3,final_energy4,final_energy5],s=100)
-ax.set_xticks([1,2,3,4,5],[label1,label2,label3,label4,label5])
-ax.set_ylabel(r'$\Delta$E/N')
-ax.ticklabel_format(axis='y',style='sci',scilimits=[0,0])
-ax.grid(which='both', axis='both')
-# plt.savefig('./draw/energy_compare_final.pdf',bbox_inches = 'tight', pad_inches=0.1)
-plt.savefig('./draw/energy_compare_final.pdf', pad_inches=0.1)
+plt.savefig('./draw_v3/energy_compare.pdf', pad_inches=0.1)

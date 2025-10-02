@@ -30,25 +30,28 @@ class AmpCNNComplexPhiMultiLinear(Model):
         conv_A = layers.Conv2D(filters=128, kernel_size=6, padding='VALID', name='conv_amp', kernel_initializer=tf.keras.initializers.GlorotNormal())(inputs_pbc)
         self.num_param_amp = (6*6+1)*128
         conv_A = tf.math.abs(conv_A)
-        # pool_A,A_indices = tf.math.top_k(conv_A, k=1)
+        pool_A = tf.math.reduce_max(conv_A, axis=-1)
         # lnA = tf.math.reduce_sum(pool_A,axis=[-1,-2,-3])
         
-        splits = tf.split(conv_A, num_or_size_splits = 2, axis = -1)
-        first_max = tf.math.reduce_max(splits[0], axis = -1)
-        second_max = tf.math.reduce_max(splits[1], axis = -1)
-        combine_max = tf.complex(first_max, second_max)
+        pool_A_reshape = layers.Reshape((length ** dimension,),input_shape=(length,length))(pool_A)
+        real = layers.Dense(units=1)(pool_A_reshape)
+        imag = layers.Dense(units=1)(pool_A_reshape)
+        lnA = tf.complex(real, imag)
+        lnA = tf.squeeze(lnA,axis=-1)
 
-        # logsumexp
-        exp_combine_max = tf.math.exp(combine_max)
-        sum_exp_combine_max = tf.math.reduce_sum(exp_combine_max, axis=[-1,-2])
-        lnA = tf.math.log(sum_exp_combine_max)
+        # splits = tf.split(conv_A, num_or_size_splits = 2, axis = -1)
+        # first_max = tf.math.reduce_max(splits[0], axis = -1)
+        # second_max = tf.math.reduce_max(splits[1], axis = -1)
+        # combine_max = tf.complex(first_max, second_max)
 
-        # plain sum
-        # lnA = tf.math.reduce_sum(combine_max, axis=[-1,-2])
+        # # logsumexp
+        # exp_combine_max = tf.math.exp(combine_max)
+        # sum_exp_combine_max = tf.math.reduce_sum(exp_combine_max, axis=[-1,-2])
+        # lnA = tf.math.log(sum_exp_combine_max)
 
         ## phase
-        dense1_phi = layers.Dense(units=8, activation='relu', name = 'dense1_phi')(inputs)
-        dense2_phi = layers.Dense(units=8, activation='relu', name = 'dense2_phi')(dense1_phi)
+        dense1_phi = layers.Dense(units=16, activation='relu', name = 'dense1_phi')(inputs)
+        dense2_phi = layers.Dense(units=16, activation='relu', name = 'dense2_phi')(dense1_phi)
         phi = layers.Dense(units=1, name = 'dense3_phi')(dense2_phi)
         phi = tf.squeeze(phi,axis=-1)
 

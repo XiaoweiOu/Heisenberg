@@ -4,7 +4,7 @@ import time
 import csv
 import os
 import gc
-from gradient import get_gradient,get_gradient_sr,get_gradient_minsr,get_gradient_amp_penalty
+from gradient import *
 
 # Print everything
 # np.set_printoptions(threshold=np.inf)
@@ -113,10 +113,28 @@ class KerasLearner:
                 grads, grad_norm = get_gradient(derlogs, self.samples.shape[0], elocs)
             elif self.use_gradient == 'sr':
                 grads, grad_norm, inner_product = get_gradient_sr(derlogs, self.samples.shape[0], elocs, self.model.num_param_amp)
+            elif self.use_gradient == 'sr_new':
+                grads, inner_product = get_gradient_sr_new(derlogs, self.samples.shape[0], elocs)
+
+
             elif self.use_gradient == 'amp_penalty':
                 grads, grad_norm, inner_product = get_gradient_amp_penalty(derlogs, self.samples.shape[0], elocs, self.model.num_param_amp)
+            elif self.use_gradient == 'amp_penalty_tri_tilde':
+                grads, inner_product = get_gradient_amp_penalty_tri_tilde(derlogs, self.samples.shape[0], elocs, self.model.num_param_amp)
+            elif self.use_gradient == 'amp_penalty_tri_tilde_linearsolve':
+                grads, inner_product = get_gradient_amp_penalty_tri_tilde_linearsolve(derlogs, self.samples.shape[0], elocs, self.model.num_param_amp)
+            elif self.use_gradient == 'amp_penalty_tri_tilde_linearsolve_epsilon':
+                grads, inner_product = get_gradient_amp_penalty_tri_tilde_linearsolve_epsilon(derlogs, self.samples.shape[0], elocs, self.model.num_param_amp)
+            
             elif self.use_gradient == 'minsr':
-                grads, grad_norm, inner_product = get_gradient_minsr(derlogs, self.samples.shape[0], elocs, self.model.num_param_amp, mass = 1.)
+                grads, grad_norm, inner_product = get_gradient_minsr(derlogs, self.samples.shape[0], elocs, self.model.num_param_amp)
+            elif self.use_gradient == 'minsr_tri_tilde':
+                grads, inner_product = get_gradient_minsr_tri_tilde(derlogs, self.samples.shape[0], elocs, self.model.num_param_amp)
+            elif self.use_gradient == 'minsr_tri_tilde_linearsolve':
+                grads, inner_product = get_gradient_minsr_tri_tilde_linearsolve(derlogs, self.samples.shape[0], elocs, self.model.num_param_amp)
+            elif self.use_gradient == 'minsr_tri_tilde_linearsolve_epsilon':
+                grads, inner_product = get_gradient_minsr_tri_tilde_linearsolve_epsilon(derlogs, self.samples.shape[0], elocs, self.model.num_param_amp)
+            
             else:
                 print("### ERROR ### gradient type incorrect!")
                 exit(0)
@@ -124,7 +142,7 @@ class KerasLearner:
             ##### 3. Save energy, current MC samples, and neural network
             ## save energy and samples
             if self.is_save:
-                self.save_energy(epoch,energy,energy_std,grad_norm,self.optimizer.lr.numpy())
+                self.save_energy(epoch,energy,energy_std,self.optimizer.lr.numpy())
                 self.save_samples(self.samples.numpy().tolist())
 
             ## save model
@@ -153,9 +171,6 @@ class KerasLearner:
 
             if self.model.__class__.__name__ == 'AmpCNNPhiMultiLinearTriangle' and energy<-10:
                 equilibration_step = self.model.num_points*50
-
-            ### TEST ### for minSR
-            equilibration_step = self.model.num_points*20
 
             self.samples = self.sampler.sample(self.model, self.samples, self.minibatch_size, num_steps=equilibration_step)
 
@@ -261,7 +276,7 @@ class KerasLearner:
 
         return energy_imag, energy, energy_std, rel_error
 
-    def save_energy(self, epoch, energy, energy_std, grad_norm, learning_rate):
+    def save_energy(self, epoch, energy, energy_std, learning_rate):
         """
         Save all energy values and the standard deviation of the current local energy array.
         """
@@ -269,13 +284,13 @@ class KerasLearner:
         if os.path.isfile(result_file) == False or (self.initial_sample_path == None and epoch == 0):
             csvfile = open(result_file,'w')
             csvwriter = csv.writer(csvfile)
-            csvwriter.writerow(['epoch','energy','energy_std','grad_amp_before','grad_phi_before','grad_amp_after','grad_phi_after','learning_rate'])
-            csvwriter.writerow([epoch,energy,energy_std]+grad_norm+[learning_rate])
+            csvwriter.writerow(['epoch','energy','energy_std','learning_rate'])
+            csvwriter.writerow([epoch,energy,energy_std,learning_rate])
             csvfile.close()
         else:
             with open(result_file,'a') as csvfile:
                 csvwriter = csv.writer(csvfile)
-                csvwriter.writerow([epoch,energy,energy_std]+grad_norm+[learning_rate])
+                csvwriter.writerow([epoch,energy,energy_std,learning_rate])
 
     '''def save_samples(self, samples):
         """

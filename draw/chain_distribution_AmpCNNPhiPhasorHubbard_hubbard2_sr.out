@@ -1,0 +1,9 @@
+INFO: total number of configurations 1000
+INFO: number of the distinct configurations 7
+[[1, 0], [0, 1], [0, 1], [1, 0]] count: 253 frequency: 0.253
+[[0, 1], [1, 0], [1, 0], [0, 1]] count: 252 frequency: 0.252
+[[0, 1], [0, 1], [1, 0], [1, 0]] count: 138 frequency: 0.138
+[[1, 0], [1, 0], [0, 1], [0, 1]] count: 132 frequency: 0.132
+[[1, 1], [1, 1], [0, 0], [0, 0]] count: 113 frequency: 0.113
+[[0, 0], [0, 0], [1, 1], [1, 1]] count: 111 frequency: 0.111
+[[1, 1], [0, 1], [1, 0], [0, 0]] count: 1 frequency: 0.001

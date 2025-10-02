@@ -44,10 +44,10 @@ def marshall_sign(binary,lattice_size):
 
 # configurations used in the training
 label1 = r'$J_2/J_1 = 0$'
-mcmc_data1 = np.load('result_paper_v2/AmpCNNPhiMultiLinearTest_SUN6_mass4_symmetrized_adaptivestep_samples.npy')
+mcmc_data1 = np.load('result/AmpCNNComplexPhiMultiLinear_SUN6_mass4_symmetrized_adaptivestep_samples.npy')
 
 # Network prediction
-load_model_path1 = 'result_paper_v2/AmpCNNPhiMultiLinearTest_SUN6_mass4_symmetrized_adaptivestep'
+load_model_path1 = 'result/AmpCNNComplexPhiMultiLinear_SUN6_mass4_symmetrized_adaptivestep'
 mlp1 = AmpCNNPhiMultiLinear(length = square2d.length, dimension = square2d.dimension, loadpath = load_model_path1, symmetry = symmetry)
 pred1 = mlp1.log_val(tf.constant(mcmc_data1))
 phase1 = tf.math.imag(pred1).numpy()
@@ -72,10 +72,10 @@ diff1 = diff1 - stt.mean(diff1)
 
 # configurations used in the training
 label2 = r'$J_2/J_1 = 0.5$'
-mcmc_data2 = np.load('result_paper_v2/AmpCNNPhiMultiLinearTest_SUN6_mass4_symmetrized_adaptivestep_j205_samples.npy')
+mcmc_data2 = np.load('result/AmpCNNComplexPhiMultiLinear_SUN6_mass4_symmetrized_adaptivestep_j205_samples.npy')
 
 # Network prediction
-load_model_path2 = 'result_paper_v2/AmpCNNPhiMultiLinearTest_SUN6_mass4_symmetrized_adaptivestep_j205'
+load_model_path2 = 'result/AmpCNNComplexPhiMultiLinear_SUN6_mass4_symmetrized_adaptivestep_j205'
 mlp2 = AmpCNNPhiMultiLinear(length = square2d.length, dimension = square2d.dimension, loadpath = load_model_path2, symmetry = symmetry)
 pred2 = mlp2.log_val(tf.constant(mcmc_data2))
 phase2 = tf.math.imag(pred2).numpy()
@@ -133,7 +133,7 @@ plt.savefig('./draw/marshall_sign_diff.pdf',bbox_inches = 'tight', pad_inches=0.
 
 plt.clf()
 plt.cla()
-plt.scatter(x = marshall_sign_config1,y = phase1,marker='*')
+plt.scatter(x = marshall_sign_config2,y = phase2,marker='*')
 plt.xlabel('Marshall sign')
 plt.ylabel('Network prediction')
 plt.savefig('./draw/marshall_sign_diff_2D.jpg')

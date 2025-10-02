@@ -1,7 +1,7 @@
 import numpy as np
 from collections import Counter
 
-sample_file = 'result/AmpCNNPhiMultiLinearTriangle_SUN6_mass4_symmetrized_adaptivestep_j205_samples.npy'
+sample_file = 'result/AmpCNNPhiMultiLinearTest_SUN6_pureSR_symmetrized_j205_samples.npy'
 samples = np.load(sample_file)
 print('INFO: total number of configurations',len(samples))
 

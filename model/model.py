@@ -44,15 +44,6 @@ class Model:
         """
         raise NotImplementedError
 
-    # def PBCs(self,inputs,padding):
-    #     """
-    #     apply periodic boundary condition to the input lattice
-    #     padding = int((kernel_size-1)/2)
-    #     """
-    #     inputs_pc = layers.Concatenate(axis=1)([inputs[:,-padding:,:,:],inputs,inputs[:,:padding,:,:]])
-    #     inputs_pc = layers.Concatenate(axis=2)([inputs_pc[:,:,-padding:,:],inputs_pc,inputs_pc[:,:,:padding,:]])
-    #     return inputs_pc
-
     def PBCs(self,inputs,padding):
         """
         apply periodic boundary condition to one side of the input lattice
@@ -146,7 +137,7 @@ class Model:
 
     #     return [tf.complex(real_jacobians[i], imag_jacobians[i]) for i in range(len(real_jacobians))]
     
-    def derlog(self, x, batch_size=20):
+    def derlog(self, x, batch_size=100):
         """
         Calculate $D_{W}(x) = D_{W} = (1 / \Psi(x)) * (d \Psi(x) / dW) = dlog(Psi(x))/dW$ where W can be the weights or the biases.
         batch_size = 500 (symmetrized version: 100)
