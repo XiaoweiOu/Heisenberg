@@ -4,3 +4,5 @@ This is the repository for paper *Improving neural network performance for solvi
 
 To run the code
 `python notebooks/heisenberg_energy.py`
+
+This repository uses TensorFlow for neural networks and automatic differentiation.
